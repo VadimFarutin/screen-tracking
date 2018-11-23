@@ -4,12 +4,7 @@ import numpy as np
 import cv2
 
 from util import get_screen_size, get_object_points, get_image_points,\
-    center_points, get_video_frame_size
-
-
-def load_matrix(path):
-    matrix = np.loadtxt(path)
-    return matrix
+    center_points, get_video_frame_size, load_matrix
 
 
 def get_extrinsic_params(object_points_all, image_points_all, camera_matrix):

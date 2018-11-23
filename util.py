@@ -71,3 +71,16 @@ def get_video_frame_size(video_path):
     capture.release()
 
     return width, height
+
+
+def load_matrix(path):
+    matrix = np.loadtxt(path)
+    return matrix
+
+
+def load_positions(positions_path):
+    with open(positions_path, newline='') as csv_file:
+        params_reader = csv.reader(csv_file, delimiter=',')
+        extrinsic_params = [[float(x) for x in row] for row in params_reader]
+
+    return extrinsic_params
