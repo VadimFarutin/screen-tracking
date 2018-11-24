@@ -2,8 +2,12 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
+from algorithms.fake import FakeTracker
 from algorithms.rapid import RapidScreenTracker
-from util import get_screen_size, get_object_points, load_matrix, load_positions
+from algorithms.contour_sum import ContourSumTracker
+
+from util import get_screen_size, get_object_points, load_matrix,\
+    load_positions, get_video_frame_size
 
 
 class Testing:
@@ -20,19 +24,22 @@ class Testing:
 
     def run_algorithm(self, algorithm_impl, video_path, init_params):
         capture = cv2.VideoCapture(video_path)
-        success, current_frame = capture.read()
+        success, frame = capture.read()
+        current_gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         estimated_extrinsic_params = [init_params[0]]
 
         for i in range(len(init_params) - 1):
-            success, next_frame = capture.read()
+            success, frame = capture.read()
+            next_gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
             if not success:
                 break
 
             rmat, tvec = algorithm_impl.track(
-                current_frame, next_frame, init_params[i][0], init_params[i][1])
+                current_gray_frame, next_gray_frame,
+                init_params[i][0], init_params[i][1])
             estimated_extrinsic_params.append([rmat, tvec])
-            current_frame = next_frame
+            current_gray_frame = next_gray_frame
 
         capture.release()
         return estimated_extrinsic_params
@@ -55,9 +62,10 @@ class Testing:
 
         return error
 
-    def show_error(self, error):
+    def show_error(self, error, algorithm_class):
         fig, ax = plt.subplots()
-        ax.plot(range(len(error)), error, color='blue', label='rapid')
+        ax.plot(range(len(error)), error, color='blue',
+                label=str(algorithm_class))
         ax.plot(range(len(error)), error, 'o', color='blue')
         plt.legend()
         plt.show()
@@ -68,12 +76,14 @@ class Testing:
         object_points = get_object_points(width, height)
         loaded_params = load_positions(test_path + '/positions.csv')
         extrinsic_params = self.format_params(loaded_params)
-        algorithm_impl = algorithm_class(camera_matrix, object_points)
+        frame_size = get_video_frame_size(test_path + '/video.mp4')
+        algorithm_impl = algorithm_class(camera_matrix, object_points, frame_size)
         estimated_extrinsic_params = self.run_algorithm(
             algorithm_impl, test_path + '/video.mp4', extrinsic_params)
 
-        error = self.calculate_error(object_points, extrinsic_params, estimated_extrinsic_params)
-        self.show_error(error)
+        error = self.calculate_error(
+            object_points, extrinsic_params, estimated_extrinsic_params)
+        self.show_error(error, algorithm_class)
 
 
 if __name__ == '__main__':

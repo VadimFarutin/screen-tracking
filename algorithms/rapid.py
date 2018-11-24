@@ -1,15 +1,238 @@
+import cv2
+import numpy as np
+import math as math
+
 
 class RapidScreenTracker:
-    def __init__(self, camera_mat, screen):
+    EDGE_CONTROL_POINTS_NUMBER = 100
+    EDGE_NUMBER = 4
+    EDGE_ERROR_THRESHOLD = 5
+    EDGE_POINT_FILTER_THRESHOLD = 7
+    NUMBER_OF_MEAN_COLOR_STEPS = 0
+    NUMBER_OF_STEPS = 20
+    # ALPHA = 1
+    # BETA = 1e-1
+    ALPHA = 1
+    BETA = 0
+
+    def __init__(self, camera_mat, object_points, frame_size):
+        self.camera_mat = camera_mat
+        self.object_points = object_points
+        self.frame_size = np.array(list(frame_size))
+        self.vecSpeed = np.array([[0], [0], [0], [0], [0], [0]],
+                                 dtype=np.float32)
+
+    def draw(self):
         pass
 
     def track(self, frame1_grayscale_mat, frame2_grayscale_mat,
               pos1_rotation_mat, pos1_translation):
-        # todo
-        pos2_rotation_mat = pos1_rotation_mat
-        pos2_translation = pos1_translation
+        controlPoints, controlPointsPair = self.control_points(
+            self.object_points, RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER)
+        controlPoints = [controlPoints[i * RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER:
+                                       (i + 1) * RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER]
+                         for i in range(RapidScreenTracker.EDGE_NUMBER)]
+        controlPointsPair = [controlPointsPair[i * RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER:
+                                               (i + 1) * RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER]
+                             for i in range(RapidScreenTracker.EDGE_NUMBER)]
 
-        return pos2_rotation_mat, pos2_translation
+        imagePoints = []
+        imagePointsIdx = []
+        edgeLines = []
+        rejectedPoints = []
 
-    def draw(self):
-        pass
+        pos1_rotation, _ = cv2.Rodrigues(pos1_rotation_mat)
+
+        for i in range(RapidScreenTracker.EDGE_NUMBER):
+            R = controlPoints[i]
+            S = controlPointsPair[i]
+            r, _ = cv2.projectPoints(
+                np.array(R), pos1_rotation, pos1_translation, self.camera_mat, None)
+            s, _ = cv2.projectPoints(
+                np.array(S), pos1_rotation, pos1_translation, self.camera_mat, None)
+            r = r.reshape((len(R), 2))
+            s = s.reshape((len(S), 2))
+
+            foundPoints, foundPointsIdx = self.search_edge(
+                r, s, frame2_grayscale_mat, i)
+            corners = RapidScreenTracker.linear_regression(foundPoints)
+            edgeLines.append(corners)
+            error = RapidScreenTracker.find_edge_error(foundPoints, corners)
+
+            if error > RapidScreenTracker.EDGE_ERROR_THRESHOLD:
+                continue
+
+            accepted, acceptedIdx, rejected = RapidScreenTracker.filter_edge_points(
+                foundPoints, foundPointsIdx, corners)
+            imagePoints.extend(accepted)
+            imagePointsIdx.extend(acceptedIdx)
+            rejectedPoints.extend(rejected)
+
+        imagePoints = np.array(imagePoints, np.float32)
+        allControlPoints = np.array([controlPoints[i // RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER]
+                                                  [i % RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER]
+                                     for i in imagePointsIdx])
+
+        lastRVec = np.copy(pos1_rotation)
+        lastTVec = np.copy(pos1_translation)
+
+        cv2.solvePnP(allControlPoints, imagePoints, self.camera_mat, None,
+                     pos1_rotation, pos1_translation)
+        # retval, rvec, tvec, _ = cv2.solvePnPRansac(
+        #     allControlPoints, imagePoints, cameraMatrix, None)
+
+        diffRVec = pos1_rotation - lastRVec
+        diffTVec = pos1_translation - lastTVec
+
+        rvec = lastRVec + RapidScreenTracker.ALPHA * diffRVec \
+            + self.vecSpeed[0:3]
+        tvec = lastTVec + RapidScreenTracker.ALPHA * diffTVec \
+            + self.vecSpeed[3:6]
+        self.vecSpeed += RapidScreenTracker.BETA \
+            * np.append(rvec - lastRVec, tvec - lastTVec, axis=0)
+
+        rmat, _ = cv2.Rodrigues(rvec)
+        return rmat, tvec
+
+    @staticmethod
+    def get_search_direction(tana):
+        pi4 = math.pi / 4
+        pi8 = pi4 / 2
+
+        if math.fabs(tana) >= math.tan(pi4 + pi8):
+            return 1, 0
+        elif math.fabs(tana) <= math.tan(pi8):
+            return 0, 1
+        elif math.tan(pi8) < tana < math.tan(pi4 + pi8):
+            return 1, 1
+        elif -math.tan(pi8) > tana > -math.tan(pi4 + pi8):
+            return 1, -1
+
+    @staticmethod
+    def get_distance(tana, sina, cosa, n):
+        pi4 = math.pi / 4
+        pi8 = pi4 / 2
+
+        if math.fabs(tana) >= math.tan(pi4 + pi8):
+            return -n * sina
+        elif math.fabs(tana) <= math.tan(pi8):
+            return n * cosa
+        elif math.tan(pi8) < tana < math.tan(pi4 + pi8):
+            return n * (cosa - sina)
+        elif -math.tan(pi8) > tana > -math.tan(pi4 + pi8):
+            return n * (cosa + sina)
+
+    def search_edge(self, r, s, gradientMap, edgeIndex):
+        cos_a = np.array([(si[0] - ri[0]) / np.linalg.norm(si - ri)
+                          for si, ri in zip(s, r)])
+        sin_a = np.array([(si[1] - ri[1]) / np.linalg.norm(si - ri)
+                          for si, ri in zip(s, r)])
+        tana = sin_a / cos_a
+
+        foundPoints = []
+        foundPointsIdx = []
+
+        for j in range(RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER):
+            step_x, step_y = RapidScreenTracker.get_search_direction(tana[j])
+            point = self.search_edge_from_point(
+                gradientMap, r[j], (step_x, step_y))
+            foundPoints.append(point)
+            foundPointsIdx.append(
+                edgeIndex * RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER + j)
+
+        return foundPoints, foundPointsIdx
+
+    def search_edge_from_point(self, edges, start, step):
+        intStart = np.int32(start) + self.frame_size // 2
+        maxGradientPoint = np.copy(intStart)
+        maxGradient = abs(edges[intStart[1], intStart[0]])
+
+        maxGradient, maxGradientPoint = \
+            RapidScreenTracker.search_edge_from_point_to_one_side(
+                edges, intStart, step, RapidScreenTracker.NUMBER_OF_STEPS,
+                maxGradient, maxGradientPoint)
+        step = (-step[0], -step[1])
+        maxGradient, maxGradientPoint = \
+            RapidScreenTracker.search_edge_from_point_to_one_side(
+                edges, intStart, step, RapidScreenTracker.NUMBER_OF_STEPS,
+                maxGradient, maxGradientPoint)
+
+        return maxGradientPoint - self.frame_size // 2
+
+    @staticmethod
+    def search_edge_from_point_to_one_side(
+            edges, start, step, count, maxGradient, maxGradientPoint):
+        current = np.copy(start)
+
+        for i in range(count):
+            current += step
+            gradientValue = abs(edges[current[1], current[0]])
+
+            if maxGradient < gradientValue:
+                maxGradient = gradientValue
+                maxGradientPoint = np.copy(current)
+
+        return maxGradient, maxGradientPoint
+
+    @staticmethod
+    def linear_regression(points):
+        x = [point[0] for point in points]
+        y = [point[1] for point in points]
+
+        if abs(x[0] - x[-1]) >= abs(y[0] - y[-1]):
+            A = np.vstack([x, np.ones(len(x))]).T
+            k, b = np.linalg.lstsq(A, y, rcond=None)[0]
+            corners = np.array([[x[0], k * x[0] + b],
+                                [x[-1], k * x[-1] + b]])
+        else:
+            A = np.vstack([y, np.ones(len(y))]).T
+            k, b = np.linalg.lstsq(A, x, rcond=None)[0]
+            corners = np.array([[k * y[0] + b, y[0]],
+                                [k * y[-1] + b, y[-1]]])
+
+        return corners
+
+    @staticmethod
+    def find_edge_error(foundPoints, corners):
+        error = 0
+
+        for point in foundPoints:
+            error += np.linalg.norm(
+                np.cross(corners[1] - corners[0], corners[0] - point)) \
+                / np.linalg.norm(corners[1] - corners[0])
+        error /= RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER
+
+        return error
+
+    @staticmethod
+    def filter_edge_points(foundPoints, foundPointsIdx, corners):
+        accepted = []
+        acceptedIdx = []
+        rejected = []
+
+        for point, j in zip(foundPoints, foundPointsIdx):
+            d = np.linalg.norm(
+                np.cross(corners[1] - corners[0], corners[0] - point)) \
+                / np.linalg.norm(corners[1] - corners[0])
+            if d <= RapidScreenTracker.EDGE_POINT_FILTER_THRESHOLD:
+                accepted.append(point)
+                acceptedIdx.append(j)
+            else:
+                rejected.append(point)
+
+        return accepted, acceptedIdx, rejected
+
+    @staticmethod
+    def control_points(objectPoints, oneSideCount):
+        points = np.copy(objectPoints)
+        points = np.append(points, [objectPoints[0]], axis=0)
+
+        controlPoints = [list(point * (j + 1) / (oneSideCount + 1)
+                         + nextPoint * (oneSideCount - j) / (oneSideCount + 1))
+                         for (point, nextPoint) in zip(points[:-1], points[1:])
+                         for j in range(oneSideCount)]
+        controlPointPairs = [point
+                             for point in points[:-1]
+                             for j in range(oneSideCount)]
+
+        return controlPoints, controlPointPairs
