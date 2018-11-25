@@ -5,6 +5,8 @@ from matplotlib import pyplot as plt
 from algorithms.fake import FakeTracker
 from algorithms.rapid import RapidScreenTracker
 from algorithms.contour_sum import ContourSumTracker
+from algorithms.sift import SiftTracker
+
 
 from util import get_screen_size, get_object_points, load_matrix,\
     load_positions, get_video_frame_size
