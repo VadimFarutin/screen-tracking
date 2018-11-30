@@ -39,7 +39,8 @@ class Testing:
 
             rmat, tvec = algorithm_impl.track(
                 current_gray_frame, next_gray_frame,
-                init_params[i][0], init_params[i][1])
+                np.copy(init_params[i][0]),
+                np.copy(init_params[i][1]))
             estimated_extrinsic_params.append([rmat, tvec])
             current_gray_frame = next_gray_frame
 
@@ -72,6 +73,44 @@ class Testing:
         plt.legend()
         plt.show()
 
+    def project_points(self, frame_size, object_points, camera_matrix, param):
+        rmat = param[0]
+        rvec, _ = cv2.Rodrigues(rmat)
+        tvec = param[1]
+
+        image_points, _ = cv2.projectPoints(
+            object_points, rvec, tvec, camera_matrix, None)
+        image_points = image_points.reshape((len(object_points), 2))
+        # image_points += np.array([frame_size[0] // 2, frame_size[1] // 2])
+
+        return image_points
+
+    def visualize(self, video_path, frame_size, object_points,
+                  camera_matrix, params1, params2):
+        capture = cv2.VideoCapture(video_path)
+        cv2.namedWindow("tracking")
+
+        for param1, param2 in zip(params1, params2):
+            success, frame = capture.read()
+
+            image_points1 = self.project_points(
+                frame_size, object_points, camera_matrix, param1)
+            image_points2 = self.project_points(
+                frame_size, object_points, camera_matrix, param2)
+
+            cv2.polylines(frame, np.array([image_points1], dtype=np.int32),
+                          True, (0, 255, 0))
+            cv2.polylines(frame, np.array([image_points2], dtype=np.int32),
+                          True, (0, 0, 255))
+
+            while True:
+                cv2.imshow('tracking', frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+        cv2.destroyAllWindows()
+        capture.release()
+
     def run_test(self, test_path, algorithm_class):
         camera_matrix = load_matrix(test_path + '/camera_matrix.txt')
         width, height = get_screen_size(test_path + '/screen_parameters.csv')
@@ -86,7 +125,12 @@ class Testing:
         error = self.calculate_error(
             object_points, extrinsic_params, estimated_extrinsic_params)
         self.show_error(error, algorithm_class)
+        self.visualize(test_path + '/video.mp4',
+                       frame_size,
+                       object_points,
+                       camera_matrix,
+                       extrinsic_params, estimated_extrinsic_params)
 
 
 if __name__ == '__main__':
-    Testing().run_test('tests/home_monitor', RapidScreenTracker)
+    Testing().run_test('tests/living_room', FakeTracker)
