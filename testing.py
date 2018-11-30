@@ -9,20 +9,12 @@ from algorithms.sift import SiftTracker
 
 
 from util import get_screen_size, get_object_points, load_matrix,\
-    load_positions, get_video_frame_size
+    load_positions, get_video_frame_size, format_params
 
 
 class Testing:
     def __init__(self):
         pass
-
-    def format_params(self, params):
-        formatted = [[np.array([row[1:4],
-                                row[4:7],
-                                row[7:10]]),
-                      np.array([[row[10]], [row[11]], [row[12]]])]
-                     for row in params]
-        return formatted
 
     def run_algorithm(self, algorithm_impl, video_path, init_params):
         capture = cv2.VideoCapture(video_path)
@@ -116,8 +108,9 @@ class Testing:
         width, height = get_screen_size(test_path + '/screen_parameters.csv')
         object_points = get_object_points(width, height)
         loaded_params = load_positions(test_path + '/positions.csv')
-        extrinsic_params = self.format_params(loaded_params)
+        extrinsic_params = format_params(loaded_params)
         frame_size = get_video_frame_size(test_path + '/video.mp4')
+
         algorithm_impl = algorithm_class(camera_matrix, object_points, frame_size)
         estimated_extrinsic_params = self.run_algorithm(
             algorithm_impl, test_path + '/video.mp4', extrinsic_params)

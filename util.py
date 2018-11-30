@@ -84,3 +84,12 @@ def load_positions(positions_path):
         extrinsic_params = [[float(x) for x in row] for row in params_reader]
 
     return extrinsic_params
+
+
+def format_params(params):
+    formatted = [[np.array([row[1:4],
+                            row[4:7],
+                            row[7:10]]),
+                  np.array([[row[10]], [row[11]], [row[12]]])]
+                 for row in params]
+    return formatted
