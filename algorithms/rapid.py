@@ -8,7 +8,6 @@ class RapidScreenTracker:
     EDGE_NUMBER = 4
     EDGE_ERROR_THRESHOLD = 5
     EDGE_POINT_FILTER_THRESHOLD = 7
-    NUMBER_OF_MEAN_COLOR_STEPS = 0
     NUMBER_OF_STEPS = 20
     # ALPHA = 1
     # BETA = 1e-1
@@ -42,6 +41,7 @@ class RapidScreenTracker:
         rejectedPoints = []
 
         pos1_rotation, _ = cv2.Rodrigues(pos1_rotation_mat)
+        shift = self.frame_size // 2
 
         for i in range(RapidScreenTracker.EDGE_NUMBER):
             R = controlPoints[i]
@@ -52,9 +52,16 @@ class RapidScreenTracker:
                 np.array(S), pos1_rotation, pos1_translation, self.camera_mat, None)
             r = r.reshape((len(R), 2))
             s = s.reshape((len(S), 2))
+            # r = RapidScreenTracker.change_coordinate_system(r, shift)
+            # s = RapidScreenTracker.change_coordinate_system(s, shift)
 
             foundPoints, foundPointsIdx = self.search_edge(
                 r, s, frame2_grayscale_mat, i)
+            # foundPoints = RapidScreenTracker.change_coordinate_system(foundPoints, -shift)
+
+            if len(foundPoints) == 0:
+                continue
+
             corners = RapidScreenTracker.linear_regression(foundPoints)
             edgeLines.append(corners)
             error = RapidScreenTracker.find_edge_error(foundPoints, corners)
@@ -76,13 +83,18 @@ class RapidScreenTracker:
         lastRVec = np.copy(pos1_rotation)
         lastTVec = np.copy(pos1_translation)
 
-        cv2.solvePnP(allControlPoints, imagePoints, self.camera_mat, None,
-                     pos1_rotation, pos1_translation)
+        if len(imagePoints) < 3:
+            rvec = np.copy(pos1_rotation)
+            tvec = np.copy(pos1_translation)
+        else:
+            _, rvec, tvec = cv2.solvePnP(allControlPoints, imagePoints, self.camera_mat, None,
+                                         pos1_rotation, pos1_translation, useExtrinsicGuess=True)
+
         # retval, rvec, tvec, _ = cv2.solvePnPRansac(
         #     allControlPoints, imagePoints, cameraMatrix, None)
 
-        diffRVec = pos1_rotation - lastRVec
-        diffTVec = pos1_translation - lastTVec
+        diffRVec = rvec - lastRVec
+        diffTVec = tvec - lastTVec
 
         rvec = lastRVec + RapidScreenTracker.ALPHA * diffRVec \
             + self.vecSpeed[0:3]
@@ -93,6 +105,10 @@ class RapidScreenTracker:
 
         rmat, _ = cv2.Rodrigues(rvec)
         return rmat, tvec
+
+    @staticmethod
+    def change_coordinate_system(points, shift):
+        return points + shift
 
     @staticmethod
     def get_search_direction(tana):
@@ -134,6 +150,11 @@ class RapidScreenTracker:
 
         for j in range(RapidScreenTracker.EDGE_CONTROL_POINTS_NUMBER):
             step_x, step_y = RapidScreenTracker.get_search_direction(tana[j])
+
+            if not 0 <= r[j][0] < self.frame_size[0] \
+                    or not 0 <= r[j][1] < self.frame_size[1]:
+                continue
+
             point = self.search_edge_from_point(
                 gradientMap, r[j], (step_x, step_y))
             foundPoints.append(point)
@@ -143,29 +164,33 @@ class RapidScreenTracker:
         return foundPoints, foundPointsIdx
 
     def search_edge_from_point(self, edges, start, step):
-        intStart = np.int32(start) + self.frame_size // 2
+        intStart = np.int32(start)
         maxGradientPoint = np.copy(intStart)
         maxGradient = abs(edges[intStart[1], intStart[0]])
 
         maxGradient, maxGradientPoint = \
-            RapidScreenTracker.search_edge_from_point_to_one_side(
+            self.search_edge_from_point_to_one_side(
                 edges, intStart, step, RapidScreenTracker.NUMBER_OF_STEPS,
                 maxGradient, maxGradientPoint)
         step = (-step[0], -step[1])
         maxGradient, maxGradientPoint = \
-            RapidScreenTracker.search_edge_from_point_to_one_side(
+            self.search_edge_from_point_to_one_side(
                 edges, intStart, step, RapidScreenTracker.NUMBER_OF_STEPS,
                 maxGradient, maxGradientPoint)
 
-        return maxGradientPoint - self.frame_size // 2
+        return maxGradientPoint
 
-    @staticmethod
     def search_edge_from_point_to_one_side(
-            edges, start, step, count, maxGradient, maxGradientPoint):
+            self, edges, start, step, count, maxGradient, maxGradientPoint):
         current = np.copy(start)
 
         for i in range(count):
             current += step
+
+            if not 0 <= current[0] < self.frame_size[1] \
+                    or not 0 <= current[1] < self.frame_size[0]:
+                continue
+
             gradientValue = abs(edges[current[1], current[0]])
 
             if maxGradient < gradientValue:
