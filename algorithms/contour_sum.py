@@ -8,7 +8,8 @@ from util import get_screen_size, get_object_points, load_matrix,\
 
 
 class ContourSumTracker:
-    EDGE_CONTROL_POINTS_NUMBER = 100
+    EDGE_CONTROL_POINTS_NUMBER = 50
+    EDGE_NUMBER = 4
 
     def __init__(self, camera_mat, object_points, frame_size):
         self.camera_mat = camera_mat
@@ -22,6 +23,9 @@ class ContourSumTracker:
 
     def track(self, frame1_grayscale_mat, frame2_grayscale_mat,
               pos1_rotation_mat, pos1_translation):
+        frame1_gradient_map = cv2.Laplacian(frame1_grayscale_mat, cv2.CV_64F)
+        frame2_gradient_map = cv2.Laplacian(frame2_grayscale_mat, cv2.CV_64F)
+
         pos1_rotation, _ = cv2.Rodrigues(pos1_rotation_mat)
         x0 = np.concatenate((pos1_rotation, pos1_translation), axis=None)
         step_eps = 1e-3
@@ -34,7 +38,9 @@ class ContourSumTracker:
                   (x0[4] - t_bounds_eps, x0[4] + t_bounds_eps),
                   (x0[5] - t_bounds_eps, x0[5] + t_bounds_eps))
         ans_vec = optimize.minimize(
-            self.func, x0, frame2_grayscale_mat,
+            self.contour_gradient_sum_oriented, x0,
+            (frame1_gradient_map, frame2_gradient_map,
+             pos1_rotation, pos1_translation),
             bounds=bounds, options={'eps': step_eps})
 
         rvec = np.array([[ans_vec.x[0]], [ans_vec.x[1]], [ans_vec.x[2]]])
@@ -48,14 +54,26 @@ class ContourSumTracker:
         steps = np.arange(-half_number_of_steps, half_number_of_steps + 1, 1)
         eps = np.array([1e-3, 1e-3, 1e-3, 1e-2, 1e-2, 1e-2])
 
-        for param in init_params:
+        success, frame = capture.read()
+        current_gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        current_gradient_map = cv2.Laplacian(current_gray_frame, cv2.CV_64F)
+
+        for i in range(len(init_params) - 1):
+            param1 = init_params[i]
+            param2 = init_params[i + 1]
+
             success, frame = capture.read()
             next_gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            next_gradient_map = cv2.Laplacian(next_gray_frame, cv2.CV_64F)
 
-            rmat = param[0]
-            rvec, _ = cv2.Rodrigues(rmat)
-            tvec = param[1]
-            x = np.concatenate((rvec, tvec), axis=None)
+            rmat1 = param1[0]
+            rvec1, _ = cv2.Rodrigues(rmat1)
+            tvec1 = param1[1]
+
+            rmat2 = param2[0]
+            rvec2, _ = cv2.Rodrigues(rmat2)
+            tvec2 = param2[1]
+            x = np.concatenate((rvec2, tvec2), axis=None)
             values = []
 
             for i in range(len(x)):
@@ -65,7 +83,10 @@ class ContourSumTracker:
 
                 for j in range(len(xi)):
                     x0[i] = xi[j]
-                    f_value = self.func(x0, next_gray_frame)
+                    f_value = self.contour_gradient_sum_oriented(
+                        x0,
+                        current_gradient_map, next_gradient_map,
+                        rvec1, tvec1)
                     f_values.append(-f_value)
 
                 values.append((xi, f_values))
@@ -81,10 +102,11 @@ class ContourSumTracker:
                     axarr[i][j].set_title('%s[%i]' % ('rvec' if i == 0 else 'tvec', j))
 
             plt.show()
+            current_gradient_map = next_gradient_map
 
         capture.release()
 
-    def func(self, x, image):
+    def contour_gradient_sum(self, x, image):
         rvec_res = np.array([[x[0]], [x[1]], [x[2]]])
         tvec_res = np.array([[x[3]], [x[4]], [x[5]]])
         image_points, _ = cv2.projectPoints(
@@ -102,6 +124,49 @@ class ContourSumTracker:
                                           point_at_map[0]])
 
         return -gradient_sum
+
+    def contour_gradient_sum_oriented(
+            self, x, image1, image2, pos1_rotation, pos1_translation):
+        rvec_res = np.array([[x[0]], [x[1]], [x[2]]])
+        tvec_res = np.array([[x[3]], [x[4]], [x[5]]])
+
+        image_points1, _ = cv2.projectPoints(
+            np.array(self.control_points),
+            pos1_rotation, pos1_translation, self.camera_mat, None)
+        image_points1 = image_points1.reshape((len(self.control_points), 2))
+
+        image_points2, _ = cv2.projectPoints(
+            np.array(self.control_points),
+            rvec_res, tvec_res, self.camera_mat, None)
+        image_points2 = image_points2.reshape((len(self.control_points), 2))
+
+        f_value = 0
+
+        for i in range(ContourSumTracker.EDGE_NUMBER):
+            gradient_sum1 = 0
+            gradient_sum2 = 0
+
+            for j in range(ContourSumTracker.EDGE_CONTROL_POINTS_NUMBER):
+                point_at_map1 = np.int32(image_points1[
+                    i * ContourSumTracker.EDGE_CONTROL_POINTS_NUMBER + j])  # + self.frame_size // 2
+                if 0 <= point_at_map1[1] < self.frame_size[1] \
+                        and 0 <= point_at_map1[0] < self.frame_size[0]:
+                    gradient_sum1 += image1[point_at_map1[1],
+                                            point_at_map1[0]]
+
+                point_at_map2 = np.int32(image_points2[
+                    i * ContourSumTracker.EDGE_CONTROL_POINTS_NUMBER + j])  # + self.frame_size // 2
+                if 0 <= point_at_map2[1] < self.frame_size[1] \
+                        and 0 <= point_at_map2[0] < self.frame_size[0]:
+                    gradient_sum2 += image2[point_at_map2[1],
+                                            point_at_map2[0]]
+
+            if gradient_sum1 >= 0:
+                f_value += gradient_sum2
+            else:
+                f_value += -gradient_sum2
+
+        return -f_value
 
     @staticmethod
     def control_points(object_points, one_side_count):
