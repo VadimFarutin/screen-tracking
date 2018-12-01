@@ -42,6 +42,7 @@ class RapidScreenTracker:
 
         pos1_rotation, _ = cv2.Rodrigues(pos1_rotation_mat)
         shift = self.frame_size // 2
+        frame2_gradient_map = cv2.Laplacian(frame2_grayscale_mat, cv2.CV_64F)
 
         for i in range(RapidScreenTracker.EDGE_NUMBER):
             R = controlPoints[i]
@@ -56,7 +57,7 @@ class RapidScreenTracker:
             # s = RapidScreenTracker.change_coordinate_system(s, shift)
 
             foundPoints, foundPointsIdx = self.search_edge(
-                r, s, frame2_grayscale_mat, i)
+                r, s, frame2_gradient_map, i)
             # foundPoints = RapidScreenTracker.change_coordinate_system(foundPoints, -shift)
 
             if len(foundPoints) == 0:
