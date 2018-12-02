@@ -93,3 +93,24 @@ def format_params(params):
                   np.array([[row[10]], [row[11]], [row[12]]])]
                  for row in params]
     return formatted
+
+
+def project_points(points, rvec, tvec, camera_matrix):
+    image_points, _ = cv2.projectPoints(
+        np.array(points), rvec, tvec, camera_matrix, None)
+    image_points = image_points.reshape((len(points), 2))
+    return image_points
+
+
+def project_points_int(points, rvec, tvec, camera_matrix):
+    image_points = project_points(points, rvec, tvec, camera_matrix)
+    return np.int32(np.rint(image_points))
+
+
+def is_point_in(point, frame_size):
+    return 0 <= point[0] < frame_size[0] and 0 <= point[1] < frame_size[1]
+
+
+def rodrigues(src):
+    dst, _ = cv2.Rodrigues(src)
+    return dst

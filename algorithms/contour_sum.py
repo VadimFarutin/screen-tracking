@@ -4,7 +4,8 @@ from scipy import optimize
 from matplotlib import pyplot as plt
 
 from util import get_screen_size, get_object_points, load_matrix,\
-    load_positions, get_video_frame_size, format_params
+    load_positions, get_video_frame_size, format_params, project_points_int,\
+    is_point_in, rodrigues
 
 
 class ContourSumTracker:
@@ -26,8 +27,8 @@ class ContourSumTracker:
         frame1_gradient_map = cv2.Laplacian(frame1_grayscale_mat, cv2.CV_64F)
         frame2_gradient_map = cv2.Laplacian(frame2_grayscale_mat, cv2.CV_64F)
 
-        pos1_rotation, _ = cv2.Rodrigues(pos1_rotation_mat)
-        x0 = np.concatenate((pos1_rotation, pos1_translation), axis=None)
+        pos1_rotation = rodrigues(pos1_rotation_mat)
+        x0 = self.extrinsic_params_to_array(pos1_rotation, pos1_translation)
         step_eps = 1e-3
         r_bounds_eps = 1
         t_bounds_eps = 5
@@ -43,10 +44,19 @@ class ContourSumTracker:
              pos1_rotation, pos1_translation),
             bounds=bounds, options={'eps': step_eps})
 
-        rvec = np.array([[ans_vec.x[0]], [ans_vec.x[1]], [ans_vec.x[2]]])
-        tvec = np.array([[ans_vec.x[3]], [ans_vec.x[4]], [ans_vec.x[5]]])
-        rmat, _ = cv2.Rodrigues(rvec)
-        return rmat, tvec
+        pos2_rotation, pos2_translation = self.array_to_extrinsic_params(ans_vec.x)
+        pos2_rotation_mat = rodrigues(pos2_rotation)
+        return pos2_rotation_mat, pos2_translation
+
+    @staticmethod
+    def optimization_bounds(x):
+        bounds = ((x[0] - ContourSumTracker.R_BOUNDS_EPS, x[0] + ContourSumTracker.R_BOUNDS_EPS),
+                  (x[1] - ContourSumTracker.R_BOUNDS_EPS, x[1] + ContourSumTracker.R_BOUNDS_EPS),
+                  (x[2] - ContourSumTracker.R_BOUNDS_EPS, x[2] + ContourSumTracker.R_BOUNDS_EPS),
+                  (x[3] - ContourSumTracker.T_BOUNDS_EPS, x[3] + ContourSumTracker.T_BOUNDS_EPS),
+                  (x[4] - ContourSumTracker.T_BOUNDS_EPS, x[4] + ContourSumTracker.T_BOUNDS_EPS),
+                  (x[5] - ContourSumTracker.T_BOUNDS_EPS, x[5] + ContourSumTracker.T_BOUNDS_EPS))
+        return bounds
 
     def show_slices(self, video_path, init_params):
         capture = cv2.VideoCapture(video_path)
@@ -67,13 +77,13 @@ class ContourSumTracker:
             next_gradient_map = cv2.Laplacian(next_gray_frame, cv2.CV_64F)
 
             rmat1 = param1[0]
-            rvec1, _ = cv2.Rodrigues(rmat1)
+            rvec1 = rodrigues(rmat1)
             tvec1 = param1[1]
 
             rmat2 = param2[0]
-            rvec2, _ = cv2.Rodrigues(rmat2)
+            rvec2 = rodrigues(rmat2)
             tvec2 = param2[1]
-            x = np.concatenate((rvec2, tvec2), axis=None)
+            x_opt = self.extrinsic_params_to_array(rvec2, tvec2)
             values = []
 
             for i in range(len(x)):
@@ -183,6 +193,14 @@ class ContourSumTracker:
                                for j in range(one_side_count)]
 
         return control_points, control_point_pairs
+
+    def extrinsic_params_to_array(self, rvec, tvec):
+        return np.concatenate((rvec, tvec), axis=None)
+
+    def array_to_extrinsic_params(self, x):
+        rvec = np.array([[x[0]], [x[1]], [x[2]]])
+        tvec = np.array([[x[3]], [x[4]], [x[5]]])
+        return rvec, tvec
 
 
 if __name__ == '__main__':

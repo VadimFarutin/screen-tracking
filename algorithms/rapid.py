@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import math as math
 
+from util import project_points_int
+
 
 class RapidScreenTracker:
     EDGE_CONTROL_POINTS_NUMBER = 100
@@ -47,12 +49,10 @@ class RapidScreenTracker:
         for i in range(RapidScreenTracker.EDGE_NUMBER):
             R = controlPoints[i]
             S = controlPointsPair[i]
-            r, _ = cv2.projectPoints(
-                np.array(R), pos1_rotation, pos1_translation, self.camera_mat, None)
-            s, _ = cv2.projectPoints(
-                np.array(S), pos1_rotation, pos1_translation, self.camera_mat, None)
-            r = r.reshape((len(R), 2))
-            s = s.reshape((len(S), 2))
+            r = project_points_int(
+                R, pos1_rotation, pos1_translation, self.camera_mat)
+            s = project_points_int(
+                S, pos1_rotation, pos1_translation, self.camera_mat)
             # r = RapidScreenTracker.change_coordinate_system(r, shift)
             # s = RapidScreenTracker.change_coordinate_system(s, shift)
 
@@ -165,18 +165,17 @@ class RapidScreenTracker:
         return foundPoints, foundPointsIdx
 
     def search_edge_from_point(self, edges, start, step):
-        intStart = np.int32(start)
-        maxGradientPoint = np.copy(intStart)
-        maxGradient = abs(edges[intStart[1], intStart[0]])
+        maxGradientPoint = np.copy(start)
+        maxGradient = abs(edges[start[1], start[0]])
 
         maxGradient, maxGradientPoint = \
             self.search_edge_from_point_to_one_side(
-                edges, intStart, step, RapidScreenTracker.NUMBER_OF_STEPS,
+                edges, start, step, RapidScreenTracker.NUMBER_OF_STEPS,
                 maxGradient, maxGradientPoint)
         step = (-step[0], -step[1])
         maxGradient, maxGradientPoint = \
             self.search_edge_from_point_to_one_side(
-                edges, intStart, step, RapidScreenTracker.NUMBER_OF_STEPS,
+                edges, start, step, RapidScreenTracker.NUMBER_OF_STEPS,
                 maxGradient, maxGradientPoint)
 
         return maxGradientPoint
