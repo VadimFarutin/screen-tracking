@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import random
 from scipy import optimize
 from matplotlib import pyplot as plt
 
@@ -11,7 +12,7 @@ from util import get_screen_size, get_object_points, load_matrix,\
 class ContourSumTracker:
     EDGE_CONTROL_POINTS_NUMBER = 100
     EDGE_NUMBER = 4
-    R_BOUNDS_EPS = 1e-1
+    R_BOUNDS_EPS = 5e-2
     T_BOUNDS_EPS = 1
 
     def __init__(self, camera_mat, object_points, frame_size):
@@ -36,15 +37,48 @@ class ContourSumTracker:
         gradient_sums1 = self.get_sides_gradient_sum(
             frame1_gradient_map, pos1_rotation, pos1_translation)
 
+        def take_step(x):
+            # x[0:3] += np.random.uniform(-step_eps, step_eps, 3)
+            # x[3:6] += np.random.uniform(-10 * step_eps, 10 * step_eps, 3)
+            x[0:3] += [step_eps * random.randint(-1, 1) for i in range(3)]
+            x[3:6] += [10 * step_eps * random.randint(-1, 1) for i in range(3)]
+            return x
+
+        def check_bounds(f_new, x_new, f_old, x_old):
+            for xi, bound in zip(x_new, bounds):
+                if not bound[0] <= xi <= bound[1]:
+                    return False
+            return True
+
         # ans_vec = optimize.minimize(
         #     self.contour_gradient_sum, x0,
         #     frame2_gradient_map,
         #     bounds=bounds, options={'eps': step_eps})
 
-        ans_vec = optimize.minimize(
-            self.contour_gradient_sum_oriented, x0,
-            (frame2_gradient_map, gradient_sums1),
-            bounds=bounds, options={'eps': step_eps})
+        # ans_vec = optimize.minimize(
+        #     fun=self.contour_gradient_sum_oriented,
+        #     x0=x0,
+        #     args=(frame2_gradient_map, gradient_sums1),
+        #     bounds=bounds,
+        #     options={'eps': step_eps}
+        # )
+
+        # ans_vec = optimize.brute(
+        #     func=self.contour_gradient_sum_oriented,
+        #     ranges=bounds,
+        #     args=(frame2_gradient_map, gradient_sums1),
+        #     Ns=7
+        # )
+
+        ans_vec = optimize.basinhopping(
+            func=self.contour_gradient_sum_oriented,
+            x0=x0,
+            niter=500,
+            stepsize=10 * step_eps,
+            minimizer_kwargs={'args': (frame2_gradient_map, gradient_sums1)},
+            accept_test=check_bounds,
+            # take_step=take_step
+        )
 
         pos2_rotation, pos2_translation = self.array_to_extrinsic_params(ans_vec.x)
         pos2_rotation_mat = rodrigues(pos2_rotation)
@@ -64,7 +98,7 @@ class ContourSumTracker:
         capture = cv2.VideoCapture(video_path)
         half_number_of_steps = 100
         steps = np.arange(-half_number_of_steps, half_number_of_steps + 1, 1)
-        eps = np.array([1e-3, 1e-3, 1e-3, 1e-2, 1e-2, 1e-2])
+        step_size = np.array([1e-3, 1e-3, 1e-3, 1e-2, 1e-2, 1e-2])
 
         success, frame = capture.read()
         current_gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -92,7 +126,7 @@ class ContourSumTracker:
 
             for i in range(len(x_opt)):
                 x0 = np.copy(x_opt)
-                xi = steps * eps[i] + x0[i]
+                xi = steps * step_size[i] + x0[i]
                 f_values = []
 
                 for j in range(len(xi)):
@@ -232,7 +266,7 @@ if __name__ == '__main__':
     object_points = get_object_points(width, height)
     loaded_params = load_positions(test_path + '/positions.csv')
     extrinsic_params = format_params(loaded_params)
-    extrinsic_params = extrinsic_params[0:3]
+    extrinsic_params = extrinsic_params[0:5]
     frame_size = get_video_frame_size(test_path + '/video.mp4')
 
     tracker = ContourSumTracker(camera_matrix, object_points, frame_size)
