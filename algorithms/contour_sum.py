@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import random
+import time
 from scipy import optimize
 from scipy.ndimage import gaussian_filter
 from matplotlib import pyplot as plt
@@ -11,8 +12,10 @@ from util import get_screen_size, get_object_points, load_matrix, \
 
 
 class ContourSumTracker:
-    EDGE_CONTROL_POINTS_NUMBER = 100
+    EDGE_CONTROL_POINTS_NUMBER = 10
     EDGE_NUMBER = 4
+    R_BOUNDS_EPS = 3e-2
+    T_BOUNDS_EPS = 1.7e0
     IMAGE_SIGMA = 0
     GRADIENT_SIGMA = 0
     SLICES = np.arange(1, EDGE_NUMBER) * EDGE_CONTROL_POINTS_NUMBER
@@ -41,65 +44,118 @@ class ContourSumTracker:
         pos1_rotation = rodrigues(pos1_rotation_mat)
         x0 = self.extrinsic_params_to_array(pos1_rotation, pos1_translation)
         step_eps = 1e-3
-        bounds = ContourSumTracker.optimization_bounds(x0)
-        gradient_sums1 = self.get_sides_gradient_sum(
+        bounds = ContourSumTracker.optimization_bounds1(x0)
+        gradient_sums1 = self.get_gradient_sum_for_sides(
             frame1_gradient_map, pos1_rotation, pos1_translation)
 
-        def take_step(x):
-            # x[0:3] += np.random.uniform(-step_eps, step_eps, 3)
-            # x[3:6] += np.random.uniform(-10 * step_eps, 10 * step_eps, 3)
-            x[0:3] += [step_eps * random.randint(-1, 1) for i in range(3)]
-            x[3:6] += [10 * step_eps * random.randint(-1, 1) for i in range(3)]
-            return x
-
-        def check_bounds(f_new, x_new, f_old, x_old):
-            for xi, bound in zip(x_new, bounds):
-                if not bound[0] <= xi <= bound[1]:
-                    return False
-            return True
-
+        # def take_step(x):
+        #     # x[0:3] += np.random.uniform(-step_eps, step_eps, 3)
+        #     # x[3:6] += np.random.uniform(-10 * step_eps, 10 * step_eps, 3)
+        #     x[0:3] += [step_eps * random.randint(-1, 1) for i in range(3)]
+        #     x[3:6] += [10 * step_eps * random.randint(-1, 1) for i in range(3)]
+        #     return x
+        #
+        # def check_bounds(f_new, x_new, f_old, x_old):
+        #     for xi, bound in zip(x_new, bounds):
+        #         if not bound[0] <= xi <= bound[1]:
+        #             return False
+        #     return True
+        #
         # ans_vec = optimize.minimize(
         #     self.contour_gradient_sum, x0,
         #     frame2_gradient_map,
         #     bounds=bounds, options={'eps': step_eps})
-
+        #
         # ans_vec = optimize.minimize(
         #     fun=self.contour_gradient_sum_oriented,
         #     x0=x0,
         #     args=(frame2_gradient_map, gradient_sums1),
+        #     method='TNC',
         #     bounds=bounds,
-        #     options={'eps': step_eps}
+        #     options={
+        #         'eps': step_eps,
+        #         # 'disp': True,
+        #         # 'maxcor': 10,
+        #         # 'maxls': 10
+        #         # 'maxiter': 5000,
+        #         # 'maxfev': 5000,
+        #         # 'adaptive': True,
+        #     }
         # )
-
-        # ans_vec = optimize.brute(
-        #     func=self.contour_gradient_sum_oriented,
-        #     ranges=bounds,
-        #     args=(frame2_gradient_map, gradient_sums1),
-        #     Ns=7
-        # )
-
-        ans_vec = optimize.basinhopping(
+        start = time.time()
+        ans_vec = optimize.brute(
             func=self.contour_gradient_sum_oriented,
-            x0=x0,
-            niter=500,
-            stepsize=10 * step_eps,
-            minimizer_kwargs={'args': (frame2_gradient_map, gradient_sums1)},
-            accept_test=check_bounds,
-            # take_step=take_step
+            ranges=bounds,
+            args=(frame2_gradient_map, gradient_sums1),
+            # Ns=2,
+            # full_output=True,
+            # disp=True
         )
+        end = time.time()
+        print(end - start)
 
-        pos2_rotation, pos2_translation = self.array_to_extrinsic_params(ans_vec.x)
+        x0 = ans_vec
+        bounds = ContourSumTracker.optimization_bounds2(x0)
+        start = time.time()
+        ans_vec = optimize.brute(
+            func=self.contour_gradient_sum_oriented,
+            ranges=bounds,
+            args=(frame2_gradient_map, gradient_sums1),
+            # Ns=2,
+            # full_output=True,
+            # disp=True
+        )
+        end = time.time()
+        print(end - start)
+
+        # ans_vec = optimize.basinhopping(
+        #     func=self.contour_gradient_sum_oriented,
+        #     x0=x0,
+        #     niter=500,
+        #     stepsize=10 * step_eps,
+        #     minimizer_kwargs={'args': (frame2_gradient_map, gradient_sums1)},
+        #     accept_test=check_bounds,
+        #     # take_step=take_step
+        # )
+
+        pos2_rotation, pos2_translation = self.array_to_extrinsic_params(ans_vec)
         pos2_rotation_mat = rodrigues(pos2_rotation)
         return pos2_rotation_mat, pos2_translation
 
     @staticmethod
-    def optimization_bounds(x):
-        bounds = ((x[0] - ContourSumTracker.R_BOUNDS_EPS, x[0] + ContourSumTracker.R_BOUNDS_EPS),
-                  (x[1] - ContourSumTracker.R_BOUNDS_EPS, x[1] + ContourSumTracker.R_BOUNDS_EPS),
-                  (x[2] - ContourSumTracker.R_BOUNDS_EPS, x[2] + ContourSumTracker.R_BOUNDS_EPS),
-                  (x[3] - ContourSumTracker.T_BOUNDS_EPS, x[3] + ContourSumTracker.T_BOUNDS_EPS),
-                  (x[4] - ContourSumTracker.T_BOUNDS_EPS, x[4] + ContourSumTracker.T_BOUNDS_EPS),
-                  (x[5] - ContourSumTracker.T_BOUNDS_EPS, x[5] + ContourSumTracker.T_BOUNDS_EPS))
+    def optimization_bounds1(x):
+        # EPS = np.repeat([ContourSumTracker.R_BOUNDS_EPS,
+        #                  ContourSumTracker.T_BOUNDS_EPS],
+        #                 [3, 3])
+        # bounds = np.array([x - EPS, x + EPS]).T
+        bounds = [(x[0], x[0] + 1e-9, 1),
+                  (x[1], x[1] + 1e-9, 1),
+                  (x[2], x[2] + 1e-9, 1),
+                  slice(x[3] - ContourSumTracker.T_BOUNDS_EPS, x[3] + ContourSumTracker.T_BOUNDS_EPS,
+                        2 * ContourSumTracker.T_BOUNDS_EPS / 45),
+                  slice(x[4] - ContourSumTracker.T_BOUNDS_EPS, x[4] + ContourSumTracker.T_BOUNDS_EPS,
+                        2 * ContourSumTracker.T_BOUNDS_EPS / 45),
+                  slice(x[5] - ContourSumTracker.T_BOUNDS_EPS, x[5] + ContourSumTracker.T_BOUNDS_EPS,
+                        2 * ContourSumTracker.T_BOUNDS_EPS / 45)]
+
+        return bounds
+
+    @staticmethod
+    def optimization_bounds2(x):
+        # EPS = np.repeat([ContourSumTracker.R_BOUNDS_EPS,
+        #                  ContourSumTracker.T_BOUNDS_EPS],
+        #                 [3, 3])
+        # bounds = np.array([x - EPS, x + EPS]).T
+        bounds = [slice(x[0] - ContourSumTracker.R_BOUNDS_EPS, x[0] + ContourSumTracker.R_BOUNDS_EPS,
+                        2 * ContourSumTracker.R_BOUNDS_EPS / 20),
+                  slice(x[1] - ContourSumTracker.R_BOUNDS_EPS, x[1] + ContourSumTracker.R_BOUNDS_EPS,
+                        2 * ContourSumTracker.R_BOUNDS_EPS / 20),
+                  slice(x[2] - ContourSumTracker.R_BOUNDS_EPS, x[2] + ContourSumTracker.R_BOUNDS_EPS,
+                        2 * ContourSumTracker.R_BOUNDS_EPS / 20),
+                  (x[3], x[3] + 1e-9, 1),
+                  (x[4], x[4] + 1e-9, 1),
+                  (x[5], x[5] + 1e-9, 1)]
+
         return bounds
 
     def show_slices(self, video_path, init_params):
@@ -153,6 +209,8 @@ class ContourSumTracker:
                 values.append((xi, f_values))
 
             x_prev = self.extrinsic_params_to_array(rvec1, tvec1)
+            prev_f_value = -self.contour_gradient_sum_oriented(
+                x_prev, next_gradient_map, gradient_sums1)
 
             found_mat, found_tvec = self.track(
                 current_gray_frame, next_gray_frame, rmat1, tvec1)
@@ -179,6 +237,9 @@ class ContourSumTracker:
 
                     axarr[i][j].axvline(x=x_prev[i * 3 + j],
                                         color='blue', linestyle='dashed')
+                    axarr[i][j].plot(
+                        [x_prev[i * 3 + j]], [prev_f_value],
+                        'o', color='blue')
                     axarr[i][j].axvline(x=x_prev[i * 3 + j] - bounds_eps,
                                         color='blue', linestyle='dotted')
                     axarr[i][j].axvline(x=x_prev[i * 3 + j] + bounds_eps,
