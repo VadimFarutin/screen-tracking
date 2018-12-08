@@ -6,7 +6,7 @@ from algorithms.fake import FakeTracker
 from algorithms.rapid import RapidScreenTracker
 from algorithms.contour_sum import ContourSumTracker
 from algorithms.sift import SiftTracker
-
+from algorithms.line_based import LineSumTracker
 
 from util import get_screen_size, get_object_points, load_matrix,\
     load_positions, get_video_frame_size, format_params
