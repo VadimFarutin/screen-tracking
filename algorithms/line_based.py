@@ -147,6 +147,8 @@ class LineSumTracker:
         center = corners[0] + diff / 2
         length = np.linalg.norm(diff)
         alpha = np.arcsin(diff[1] / length)
+        if diff[0] <= 0:
+            alpha = -alpha
         x = np.array([center[0], center[1], alpha])
 
         return x, length
