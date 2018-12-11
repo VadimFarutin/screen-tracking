@@ -12,10 +12,11 @@ from util import get_screen_size, get_object_points, load_matrix, \
 
 
 class LineSumTracker:
-    EDGE_CONTROL_POINTS_NUMBER = 10
+    EDGE_CONTROL_POINTS_NUMBER = 20
     EDGE_NUMBER = 4
-    ALPHA_BOUNDS_EPS = math.pi / 2
-    T_BOUNDS_EPS = 5
+    ALPHA_BOUNDS_EPS = 5e-2
+    T_BOUNDS_EPS = 15
+    HALF_WINDOW_WIDTH = 20
 
     def __init__(self, camera_mat, object_points, frame_size):
         self.camera_mat = camera_mat
@@ -36,10 +37,13 @@ class LineSumTracker:
                                      self.camera_mat)
         corners = np.append(corners, [corners[0]], axis=0)
         corner_pairs = np.array(list(zip(corners[:-1], corners[1:])))
-        found_corners = np.array([self.move_line(pair, frame1_gradient_map, frame2_gradient_map)
+        found_corners = np.array([self.move_line(pair,
+                                                 frame1_gradient_map,
+                                                 frame2_gradient_map)
                                   for pair in corner_pairs])
         found_corners = np.append(found_corners, [found_corners[0]], axis=0)
-        found_corner_pairs = np.array(list(zip(found_corners[:-1], found_corners[1:])))
+        found_corner_pairs = np.array(list(zip(found_corners[:-1],
+                                               found_corners[1:])))
 
         image_points = np.array([self.lines_intersection(pair[0], pair[1])
                                  for pair in found_corner_pairs])
@@ -53,10 +57,12 @@ class LineSumTracker:
 
     @staticmethod
     def optimization_bounds1(x):
-        bounds = [slice(x[0] - LineSumTracker.T_BOUNDS_EPS, x[0] + LineSumTracker.T_BOUNDS_EPS,
-                        2 * LineSumTracker.T_BOUNDS_EPS / 100),
-                  slice(x[1] - LineSumTracker.T_BOUNDS_EPS, x[1] + LineSumTracker.T_BOUNDS_EPS,
-                        2 * LineSumTracker.T_BOUNDS_EPS / 100),
+        bounds = [slice(x[0] - LineSumTracker.T_BOUNDS_EPS,
+                        x[0] + LineSumTracker.T_BOUNDS_EPS,
+                        2 * LineSumTracker.T_BOUNDS_EPS / 30),
+                  slice(x[1] - LineSumTracker.T_BOUNDS_EPS,
+                        x[1] + LineSumTracker.T_BOUNDS_EPS,
+                        2 * LineSumTracker.T_BOUNDS_EPS / 30),
                   (x[2], x[2] + 1e-9, 1)]
 
         return bounds
@@ -67,7 +73,7 @@ class LineSumTracker:
                   (x[1], x[1] + 1e-9, 1),
                   slice(x[2] - LineSumTracker.ALPHA_BOUNDS_EPS,
                         x[2] + LineSumTracker.ALPHA_BOUNDS_EPS,
-                        2 * LineSumTracker.ALPHA_BOUNDS_EPS / 50)]
+                        2 * LineSumTracker.ALPHA_BOUNDS_EPS / 500)]
 
         return bounds
 
@@ -94,21 +100,82 @@ class LineSumTracker:
         corners = self.array_to_corners(x, length)
         gradient_sum2 = self.get_gradient_sum_for_side(corners, image2)
         signs = np.sign(gradient_sum1)
-        f_value = np.sum(signs * gradient_sum2)
-        # f_value = np.sum(-np.abs(gradient_sums1 - gradient_sums2))
+        # f_value = np.sum(signs * gradient_sum2)
+        f_value = np.sum(-np.abs(gradient_sum1 - gradient_sum2))
+
+        return -f_value
+
+    def get_search_direction(self, tana):
+        pi4 = math.pi / 4
+        pi8 = pi4 / 2
+
+        if math.fabs(tana) >= math.tan(pi4 + pi8):
+            return np.array([1, 0])
+        elif math.fabs(tana) <= math.tan(pi8):
+            return np.array([0, 1])
+        elif math.tan(pi8) < tana < math.tan(pi4 + pi8):
+            return np.array([1, 1])
+        elif -math.tan(pi8) > tana > -math.tan(pi4 + pi8):
+            return np.array([1, -1])
+
+    def get_window_gradients(self, image, middle_point, step):
+        window_range = np.arange(-LineSumTracker.HALF_WINDOW_WIDTH,
+                                 LineSumTracker.HALF_WINDOW_WIDTH + 1,
+                                 1)
+        window_range = window_range.reshape((len(window_range), 1))
+        step = step.reshape((1, 2))
+        steps = np.dot(window_range, step)
+        image_points = steps + middle_point
+
+        frame_size = self.frame_size
+        binded_is_point_in = lambda point: is_point_in(point, frame_size)
+        mask = np.apply_along_axis(binded_is_point_in, 1, image_points)
+        image_points = image_points[mask]
+        image_points_idx = image_points.T
+        selected_gradients = image[image_points_idx[1], image_points_idx[0]]
+
+        return selected_gradients
+
+    def get_window_gradients_for_side(self, corners, step, image):
+        image_points, _ = LineSumTracker.control_points(
+            corners, LineSumTracker.EDGE_CONTROL_POINTS_NUMBER)
+        image_points = np.int32(np.rint(image_points))
+        binded_get_window_gradients = \
+            lambda point: self.get_window_gradients(image, point, step)
+        window_gradients = np.apply_along_axis(binded_get_window_gradients,
+                                               1,
+                                               image_points)
+
+        return window_gradients
+
+    def window_gradients_distance(self, x, image2, window_gradients1, length):
+        corners = self.array_to_corners(x, length)
+        tana = np.tan(x[2])
+        step = self.get_search_direction(tana)
+        window_gradients2 = self.get_window_gradients_for_side(
+            corners, step, image2)
+        distances = window_gradients1 - window_gradients2
+        distances = np.apply_along_axis(np.abs, 1, distances)
+        distances = np.apply_along_axis(np.sum, 1, distances)
+        f_value = -np.sum(distances)
 
         return -f_value
 
     def move_line(self, corners, frame1_gradient_map, frame2_gradient_map):
-        gradient_sum1 = self.get_gradient_sum_for_side(corners, frame1_gradient_map)
+        gradient_sum1 = self.get_gradient_sum_for_side(
+            corners, frame1_gradient_map)
         x0, length = self.corners_to_array(corners)
+        tana = np.tan(x0[2])
+        step = self.get_search_direction(tana)
+        window_gradients1 = self.get_window_gradients_for_side(
+            corners, step, frame1_gradient_map)
         bounds = LineSumTracker.optimization_bounds1(x0)
 
         start = time.time()
         ans_vec = optimize.brute(
-            func=self.contour_gradient_sum_oriented,
+            func=self.window_gradients_distance,
             ranges=bounds,
-            args=(frame2_gradient_map, gradient_sum1, length),
+            args=(frame2_gradient_map, window_gradients1, length),
         )
         end = time.time()
         print(end - start)
@@ -116,10 +183,15 @@ class LineSumTracker:
         x0 = ans_vec
         bounds = LineSumTracker.optimization_bounds2(x0)
         start = time.time()
+        # ans_vec = optimize.brute(
+        #     func=self.contour_gradient_sum_oriented,
+        #     ranges=bounds,
+        #     args=(frame2_gradient_map, gradient_sum1, length),
+        # )
         ans_vec = optimize.brute(
-            func=self.contour_gradient_sum_oriented,
+            func=self.window_gradients_distance,
             ranges=bounds,
-            args=(frame2_gradient_map, gradient_sum1, length),
+            args=(frame2_gradient_map, window_gradients1, length),
         )
         end = time.time()
         print(end - start)
@@ -130,17 +202,11 @@ class LineSumTracker:
     @staticmethod
     def control_points(object_points, one_side_count):
         points = np.copy(object_points)
-        points = np.append(points, [object_points[0]], axis=0)
-        point_pairs = np.array(list(zip(points[:-1], points[1:])))
 
-        control_points = [list(pair[0] * (j + 1) / (one_side_count + 1)
-                               + pair[1]
-                                       * (one_side_count - j) / (one_side_count + 1))
-                          for pair in point_pairs
+        control_points = [list(points[0] * (j + 1) / (one_side_count + 1)
+                               + points[1]
+                                         * (one_side_count - j) / (one_side_count + 1))
                           for j in range(one_side_count)]
-        # control_point_pairs = [point
-        #                        for point in points[:-1]
-        #                        for j in range(one_side_count)]
 
         return control_points, None
 
