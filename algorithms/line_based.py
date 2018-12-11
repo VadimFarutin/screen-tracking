@@ -43,6 +43,8 @@ class LineSumTracker:
 
         image_points = np.array([self.lines_intersection(pair[0], pair[1])
                                  for pair in found_corner_pairs])
+        image_points = np.append([image_points[-1]], image_points, axis=0)
+        image_points = image_points[:-1]
 
         _, pos2_rotation, pos2_translation = cv2.solvePnP(
             self.object_points, image_points, self.camera_mat, None)
