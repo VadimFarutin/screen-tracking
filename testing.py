@@ -16,9 +16,12 @@ class Testing:
     def __init__(self):
         pass
 
-    def run_algorithm(self, algorithm_impl, video_path, init_params):
+    def run_algorithm(
+            self, algorithm_impl, video_path, init_params, start_frame):
         capture = cv2.VideoCapture(video_path)
         success, frame = capture.read()
+        for i in range(start_frame):
+            success, frame = capture.read()
         current_gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         estimated_extrinsic_params = [init_params[0]]
 
@@ -77,10 +80,12 @@ class Testing:
 
         return image_points
 
-    def visualize(self, video_path, frame_size, object_points,
+    def visualize(self, video_path, start_frame, frame_size, object_points,
                   camera_matrix, params1, params2):
         capture = cv2.VideoCapture(video_path)
         cv2.namedWindow("tracking")
+        for i in range(start_frame):
+            success, frame = capture.read()
 
         for param1, param2 in zip(params1, params2):
             success, frame = capture.read()
@@ -108,17 +113,22 @@ class Testing:
         width, height = get_screen_size(test_path + '/screen_parameters.csv')
         object_points = get_object_points(width, height)
         loaded_params = load_positions(test_path + '/positions.csv')
+        start_frame = 20
+        end_frame = 22
         extrinsic_params = format_params(loaded_params)
+        extrinsic_params = extrinsic_params[start_frame:end_frame]
         frame_size = get_video_frame_size(test_path + '/video.mp4')
 
         algorithm_impl = algorithm_class(camera_matrix, object_points, frame_size)
         estimated_extrinsic_params = self.run_algorithm(
-            algorithm_impl, test_path + '/video.mp4', extrinsic_params)
+            algorithm_impl, test_path + '/video.mp4', extrinsic_params,
+            start_frame)
 
         error = self.calculate_error(
             object_points, extrinsic_params, estimated_extrinsic_params)
         self.show_error(error, algorithm_class)
         self.visualize(test_path + '/video.mp4',
+                       start_frame,
                        frame_size,
                        object_points,
                        camera_matrix,
