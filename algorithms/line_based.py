@@ -156,6 +156,14 @@ class LineSumTracker:
             corners, step, image2)
         distances = window_gradients1 - window_gradients2
         distances = np.apply_along_axis(np.abs, 1, distances)
+        # def threshold(d):
+        #     if d > 10:
+        #         return 2
+        #     if d > 5:
+        #         return 1
+        #     return 0
+        # threshold_vect = np.vectorize(threshold)
+        # distances = np.apply_along_axis(threshold_vect, 1, distances)
         distances = np.apply_along_axis(np.sum, 1, distances)
         f_value = -np.sum(distances)
 
