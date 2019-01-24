@@ -42,7 +42,7 @@ class LineSumTracker:
         found_corner_pairs = np.array(list(zip(found_corners[:-1],
                                                found_corners[1:])))
 
-        image_points = np.array([self.lines_intersection(pair[0], pair[1])
+        image_points = np.array([LineSumTracker.lines_intersection(pair[0], pair[1])
                                  for pair in found_corner_pairs])
         image_points = np.append([image_points[-1]], image_points, axis=0)
         image_points = image_points[:-1]
@@ -94,7 +94,7 @@ class LineSumTracker:
         return gradient_sum
 
     def contour_gradient_sum_oriented(self, x, image2, gradient_sum1, length):
-        corners = self.array_to_corners(x, length)
+        corners = LineSumTracker.array_to_corners(x, length)
         gradient_sum2 = self.get_gradient_sum_for_side(corners, image2)
         signs = np.sign(gradient_sum1)
         # f_value = np.sum(signs * gradient_sum2)
@@ -102,7 +102,8 @@ class LineSumTracker:
 
         return -f_value
 
-    def get_search_direction(self, tana):
+    @staticmethod
+    def get_search_direction(tana):
         pi4 = math.pi / 4
         pi8 = pi4 / 2
 
@@ -147,7 +148,7 @@ class LineSumTracker:
 
     def window_gradients_distance(
             self, x, image2, window_gradients1, step, length):
-        corners = self.array_to_corners(x, length)
+        corners = LineSumTracker.array_to_corners(x, length)
         window_gradients2 = self.get_window_gradients_for_side(
             corners, step, image2)
         distances = window_gradients1 - window_gradients2
@@ -168,7 +169,7 @@ class LineSumTracker:
     def move_line(self, corners, frame1_gradient_map, frame2_gradient_map):
         gradient_sum1 = self.get_gradient_sum_for_side(
             corners, frame1_gradient_map)
-        x0, length = self.corners_to_array(corners)
+        x0, length = LineSumTracker.corners_to_array(corners)
         tana = np.tan(x0[2])
         step = self.get_search_direction(tana)
         window_gradients1 = self.get_window_gradients_for_side(
@@ -209,7 +210,7 @@ class LineSumTracker:
         end = time.time()
         print(end - start)
 
-        corners = self.array_to_corners(ans_vec, length)
+        corners = LineSumTracker.array_to_corners(ans_vec, length)
         return corners
 
     @staticmethod
@@ -217,13 +218,13 @@ class LineSumTracker:
         points = np.copy(object_points)
 
         control_points = [list(points[0] * (j + 1) / (one_side_count + 1)
-                               + points[1]
-                                         * (one_side_count - j) / (one_side_count + 1))
+                               + points[1] * (one_side_count - j) / (one_side_count + 1))
                           for j in range(one_side_count)]
 
         return control_points, None
 
-    def corners_to_array(self, corners):
+    @staticmethod
+    def corners_to_array(corners):
         diff = corners[1] - corners[0]
         center = corners[0] + diff / 2
         length = np.linalg.norm(diff)
@@ -234,7 +235,8 @@ class LineSumTracker:
 
         return x, length
 
-    def array_to_corners(self, x, length):
+    @staticmethod
+    def array_to_corners(x, length):
         center = np.array([x[0], x[1]])
         alpha = x[2]
         sina = np.sin(alpha)
@@ -244,7 +246,8 @@ class LineSumTracker:
 
         return corners
 
-    def lines_intersection(self, first_line_points, second_line_points):
+    @staticmethod
+    def lines_intersection(first_line_points, second_line_points):
         A = np.array([[first_line_points[0][1] - first_line_points[1][1],
                        first_line_points[1][0] - first_line_points[0][0]],
                       [second_line_points[0][1] - second_line_points[1][1],
