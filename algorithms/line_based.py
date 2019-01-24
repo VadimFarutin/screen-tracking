@@ -75,7 +75,8 @@ class LineSumTracker:
         return bounds
 
     @staticmethod
-    def get_search_direction(tana):
+    def get_search_direction(alpha):
+        tana = np.tan(alpha)
         pi4 = math.pi / 4
         pi8 = pi4 / 2
 
@@ -140,8 +141,7 @@ class LineSumTracker:
 
     def move_line(self, corners, frame1_gradient_map, frame2_gradient_map):
         x0, length = LineSumTracker.corners_to_array(corners)
-        tana = np.tan(x0[2])
-        step = self.get_search_direction(tana)
+        step = self.get_search_direction(x0[2])
         window_gradients1 = self.get_window_gradients_for_side(
             corners, step, frame1_gradient_map)
         bounds = LineSumTracker.optimization_bounds_t(x0)
