@@ -15,6 +15,7 @@ class RapidScreenTracker:
     # BETA = 1e-1
     ALPHA = 1
     BETA = 0
+    MIN_PNP_POINTS_ALLOWED = 3
 
     def __init__(self, camera_mat, object_points, frame_size):
         self.camera_mat = camera_mat
@@ -81,12 +82,14 @@ class RapidScreenTracker:
         lastRVec = np.copy(pos1_rotation)
         lastTVec = np.copy(pos1_translation)
 
-        if len(imagePoints) < 3:
+        if len(imagePoints) < RapidScreenTracker.MIN_PNP_POINTS_ALLOWED:
             rvec = np.copy(pos1_rotation)
             tvec = np.copy(pos1_translation)
         else:
-            _, rvec, tvec = cv2.solvePnP(allControlPoints, imagePoints, self.camera_mat, None,
-                                         pos1_rotation, pos1_translation, useExtrinsicGuess=True)
+            _, rvec, tvec = cv2.solvePnP(allControlPoints, imagePoints,
+                                         self.camera_mat, None,
+                                         pos1_rotation, pos1_translation,
+                                         useExtrinsicGuess=True)
 
         # retval, rvec, tvec, _ = cv2.solvePnPRansac(
         #     allControlPoints, imagePoints, cameraMatrix, None)
