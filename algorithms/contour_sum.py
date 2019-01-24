@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import random
 import time
 from scipy import optimize
 from scipy.ndimage import gaussian_filter
@@ -40,7 +39,7 @@ class ContourSumTracker:
 
         pos1_rotation = rodrigues(pos1_rotation_mat)
         x0 = self.extrinsic_params_to_array(pos1_rotation, pos1_translation)
-        step_eps = 1e-3
+        # step_eps = 1e-3
         bounds = ContourSumTracker.optimization_bounds1(x0)
         gradient_sums1 = self.get_gradient_sum_for_sides(
             frame1_gradient_map, pos1_rotation, pos1_translation)
@@ -121,10 +120,6 @@ class ContourSumTracker:
 
     @staticmethod
     def optimization_bounds1(x):
-        # EPS = np.repeat([ContourSumTracker.R_BOUNDS_EPS,
-        #                  ContourSumTracker.T_BOUNDS_EPS],
-        #                 [3, 3])
-        # bounds = np.array([x - EPS, x + EPS]).T
         bounds = [(x[0], x[0] + 1e-9, 1),
                   (x[1], x[1] + 1e-9, 1),
                   (x[2], x[2] + 1e-9, 1),
@@ -139,10 +134,6 @@ class ContourSumTracker:
 
     @staticmethod
     def optimization_bounds2(x):
-        # EPS = np.repeat([ContourSumTracker.R_BOUNDS_EPS,
-        #                  ContourSumTracker.T_BOUNDS_EPS],
-        #                 [3, 3])
-        # bounds = np.array([x - EPS, x + EPS]).T
         bounds = [slice(x[0] - ContourSumTracker.R_BOUNDS_EPS, x[0] + ContourSumTracker.R_BOUNDS_EPS,
                         2 * ContourSumTracker.R_BOUNDS_EPS / 20),
                   slice(x[1] - ContourSumTracker.R_BOUNDS_EPS, x[1] + ContourSumTracker.R_BOUNDS_EPS,
@@ -273,11 +264,6 @@ class ContourSumTracker:
     def get_gradient_sum_for_sides(self, image, rvec, tvec):
         image_points = project_points_int(
             self.control_points, rvec, tvec, self.camera_mat)
-        # image_points = project_points(
-        #     self.object_points, rvec, tvec, self.camera_mat)
-        # image_points, _ = ContourSumTracker.control_points(
-        #     image_points, ContourSumTracker.EDGE_CONTROL_POINTS_NUMBER)
-        # image_points = np.int32(np.rint(image_points))
 
         image_points_by_side = np.split(image_points, ContourSumTracker.SLICES)
         get_gradient_sum = self.get_gradient_sum
