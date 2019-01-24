@@ -171,36 +171,20 @@ class ContourSumTracker:
             next_gradient_map = cv2.Laplacian(next_gray_frame, cv2.CV_64F)
             # next_gradient_map = gaussian_filter(next_gradient_map, ContourSumTracker.GRADIENT_SIGMA)
 
-            param1 = init_params[k]
-            param2 = init_params[k + 1]
-
-            rmat1 = param1[0]
+            rmat1 = init_params[k][0]
             rvec1 = rodrigues(rmat1)
-            tvec1 = param1[1]
+            tvec1 = init_params[k][1]
             gradient_sums1 = self.get_gradient_sum_for_sides(
                 current_gradient_map, rvec1, tvec1)
 
-            rmat2 = param2[0]
+            rmat2 = init_params[k + 1][0]
             rvec2 = rodrigues(rmat2)
-            tvec2 = param2[1]
+            tvec2 = init_params[k + 1][1]
             x_opt = self.extrinsic_params_to_array(rvec2, tvec2)
-            values = []
 
-            for i in range(len(x_opt)):
-                x0 = np.copy(x_opt)
-                xi = steps * step_size[i] + x0[i]
-                f_values = []
-
-                for j in range(len(xi)):
-                    x0[i] = xi[j]
-                    # f_value = self.contour_gradient_sum(
-                    #     x0,
-                    #     next_gradient_map)
-                    f_value = self.contour_gradient_sum_oriented(
-                        x0, next_gradient_map, gradient_sums1)
-                    f_values.append(-f_value)
-
-                values.append((xi, f_values))
+            values = self.get_slices_values(x_opt,
+                                            steps, step_size,
+                                            next_gradient_map, gradient_sums1)
 
             x_prev = self.extrinsic_params_to_array(rvec1, tvec1)
             prev_f_value = -self.contour_gradient_sum_oriented(
@@ -213,48 +197,80 @@ class ContourSumTracker:
             found_f_value = -self.contour_gradient_sum_oriented(
                 x_found, next_gradient_map, gradient_sums1)
 
-            f, axarr = plt.subplots(2, 3, figsize=(20, 10))
+            ContourSumTracker.plot_slices(values, half_number_of_steps,
+                                          x_prev, prev_f_value,
+                                          x_found, found_f_value)
 
-            for i in range(2):
-                for j in range(3):
-                    axarr[i][j].plot(
-                        values[i * 3 + j][0], values[i * 3 + j][1],
-                        color='blue')
-                    axarr[i][j].plot(
-                        [values[i * 3 + j][0][half_number_of_steps]],
-                        [values[i * 3 + j][1][half_number_of_steps]],
-                        'o', color='green')
-                    axarr[i][j].axvline(x=values[i * 3 + j][0][half_number_of_steps],
-                                        color='green', linestyle='dashed')
-
-                    bounds_eps = ContourSumTracker.R_BOUNDS_EPS \
-                        if i == 0 \
-                        else ContourSumTracker.T_BOUNDS_EPS
-
-                    axarr[i][j].axvline(x=x_prev[i * 3 + j],
-                                        color='blue', linestyle='dashed')
-                    axarr[i][j].plot(
-                        [x_prev[i * 3 + j]], [prev_f_value],
-                        'o', color='blue')
-                    axarr[i][j].axvline(x=x_prev[i * 3 + j] - bounds_eps,
-                                        color='blue', linestyle='dotted')
-                    axarr[i][j].axvline(x=x_prev[i * 3 + j] + bounds_eps,
-                                        color='blue', linestyle='dotted')
-
-                    axarr[i][j].axvline(x=x_found[i * 3 + j],
-                                        color='red', linestyle='dashed')
-                    axarr[i][j].plot(
-                        [x_found[i * 3 + j]], [found_f_value],
-                        'o', color='red')
-
-                    axarr[i][j].set_title('%s[%i]' %
-                                          ('rvec' if i == 0 else 'tvec', j))
-
-            plt.show()
             current_gray_frame = next_gray_frame
             current_gradient_map = next_gradient_map
 
         capture.release()
+
+    def get_slices_values(self, x_opt,
+                          steps, step_size,
+                          next_gradient_map, gradient_sums1):
+        values = []
+
+        for i in range(len(x_opt)):
+            x0 = np.copy(x_opt)
+            xi = steps * step_size[i] + x0[i]
+            f_values = []
+
+            for j in range(len(xi)):
+                x0[i] = xi[j]
+                # f_value = self.contour_gradient_sum(
+                #     x0,
+                #     next_gradient_map)
+                f_value = self.contour_gradient_sum_oriented(
+                    x0, next_gradient_map, gradient_sums1)
+                f_values.append(-f_value)
+
+            values.append((xi, f_values))
+
+        return values
+
+    @staticmethod
+    def plot_slices(values, half_number_of_steps,
+                    x_prev, prev_f_value,
+                    x_found, found_f_value):
+        f, axarr = plt.subplots(2, 3, figsize=(20, 10))
+
+        for i in range(2):
+            for j in range(3):
+                axarr[i][j].plot(
+                    values[i * 3 + j][0], values[i * 3 + j][1],
+                    color='blue')
+                axarr[i][j].plot(
+                    [values[i * 3 + j][0][half_number_of_steps]],
+                    [values[i * 3 + j][1][half_number_of_steps]],
+                    'o', color='green')
+                axarr[i][j].axvline(x=values[i * 3 + j][0][half_number_of_steps],
+                                    color='green', linestyle='dashed')
+
+                bounds_eps = ContourSumTracker.R_BOUNDS_EPS \
+                    if i == 0 \
+                    else ContourSumTracker.T_BOUNDS_EPS
+
+                axarr[i][j].axvline(x=x_prev[i * 3 + j],
+                                    color='blue', linestyle='dashed')
+                axarr[i][j].plot(
+                    [x_prev[i * 3 + j]], [prev_f_value],
+                    'o', color='blue')
+                axarr[i][j].axvline(x=x_prev[i * 3 + j] - bounds_eps,
+                                    color='blue', linestyle='dotted')
+                axarr[i][j].axvline(x=x_prev[i * 3 + j] + bounds_eps,
+                                    color='blue', linestyle='dotted')
+
+                axarr[i][j].axvline(x=x_found[i * 3 + j],
+                                    color='red', linestyle='dashed')
+                axarr[i][j].plot(
+                    [x_found[i * 3 + j]], [found_f_value],
+                    'o', color='red')
+
+                axarr[i][j].set_title('%s[%i]' %
+                                      ('rvec' if i == 0 else 'tvec', j))
+
+        plt.show()
 
     def get_gradient_sum(self, image, image_points):
         frame_size = self.frame_size
