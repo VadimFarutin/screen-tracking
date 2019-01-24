@@ -305,10 +305,12 @@ class ContourSumTracker:
 
         return control_points, None
 
-    def extrinsic_params_to_array(self, rvec, tvec):
+    @staticmethod
+    def extrinsic_params_to_array(rvec, tvec):
         return np.concatenate((rvec, tvec), axis=None)
 
-    def array_to_extrinsic_params(self, x):
+    @staticmethod
+    def array_to_extrinsic_params(x):
         rvec = np.array([[x[0]], [x[1]], [x[2]]])
         tvec = np.array([[x[3]], [x[4]], [x[5]]])
         return rvec, tvec
