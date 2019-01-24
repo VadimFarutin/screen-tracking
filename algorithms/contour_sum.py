@@ -40,7 +40,7 @@ class ContourSumTracker:
         pos1_rotation = rodrigues(pos1_rotation_mat)
         x0 = self.extrinsic_params_to_array(pos1_rotation, pos1_translation)
         # step_eps = 1e-3
-        bounds = ContourSumTracker.optimization_bounds1(x0)
+        bounds = ContourSumTracker.optimization_bounds_t(x0)
         gradient_sums1 = self.get_gradient_sum_for_sides(
             frame1_gradient_map, pos1_rotation, pos1_translation)
 
@@ -91,7 +91,7 @@ class ContourSumTracker:
         print(end - start)
 
         x0 = ans_vec
-        bounds = ContourSumTracker.optimization_bounds2(x0)
+        bounds = ContourSumTracker.optimization_bounds_r(x0)
         start = time.time()
         ans_vec = optimize.brute(
             func=self.contour_gradient_sum_oriented,
@@ -119,26 +119,32 @@ class ContourSumTracker:
         return pos2_rotation_mat, pos2_translation
 
     @staticmethod
-    def optimization_bounds1(x):
+    def optimization_bounds_t(x):
         bounds = [(x[0], x[0] + 1e-9, 1),
                   (x[1], x[1] + 1e-9, 1),
                   (x[2], x[2] + 1e-9, 1),
-                  slice(x[3] - ContourSumTracker.T_BOUNDS_EPS, x[3] + ContourSumTracker.T_BOUNDS_EPS,
+                  slice(x[3] - ContourSumTracker.T_BOUNDS_EPS,
+                        x[3] + ContourSumTracker.T_BOUNDS_EPS,
                         2 * ContourSumTracker.T_BOUNDS_EPS / 45),
-                  slice(x[4] - ContourSumTracker.T_BOUNDS_EPS, x[4] + ContourSumTracker.T_BOUNDS_EPS,
+                  slice(x[4] - ContourSumTracker.T_BOUNDS_EPS,
+                        x[4] + ContourSumTracker.T_BOUNDS_EPS,
                         2 * ContourSumTracker.T_BOUNDS_EPS / 45),
-                  slice(x[5] - ContourSumTracker.T_BOUNDS_EPS, x[5] + ContourSumTracker.T_BOUNDS_EPS,
+                  slice(x[5] - ContourSumTracker.T_BOUNDS_EPS,
+                        x[5] + ContourSumTracker.T_BOUNDS_EPS,
                         2 * ContourSumTracker.T_BOUNDS_EPS / 45)]
 
         return bounds
 
     @staticmethod
-    def optimization_bounds2(x):
-        bounds = [slice(x[0] - ContourSumTracker.R_BOUNDS_EPS, x[0] + ContourSumTracker.R_BOUNDS_EPS,
+    def optimization_bounds_r(x):
+        bounds = [slice(x[0] - ContourSumTracker.R_BOUNDS_EPS,
+                        x[0] + ContourSumTracker.R_BOUNDS_EPS,
                         2 * ContourSumTracker.R_BOUNDS_EPS / 20),
-                  slice(x[1] - ContourSumTracker.R_BOUNDS_EPS, x[1] + ContourSumTracker.R_BOUNDS_EPS,
+                  slice(x[1] - ContourSumTracker.R_BOUNDS_EPS,
+                        x[1] + ContourSumTracker.R_BOUNDS_EPS,
                         2 * ContourSumTracker.R_BOUNDS_EPS / 20),
-                  slice(x[2] - ContourSumTracker.R_BOUNDS_EPS, x[2] + ContourSumTracker.R_BOUNDS_EPS,
+                  slice(x[2] - ContourSumTracker.R_BOUNDS_EPS,
+                        x[2] + ContourSumTracker.R_BOUNDS_EPS,
                         2 * ContourSumTracker.R_BOUNDS_EPS / 20),
                   (x[3], x[3] + 1e-9, 1),
                   (x[4], x[4] + 1e-9, 1),
