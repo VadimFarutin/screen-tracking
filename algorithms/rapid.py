@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import math as math
 
-from util import project_points_int, change_coordinate_system
+from util import project_points_int, change_coordinate_system, rodrigues
 
 
 class RapidScreenTracker:
@@ -39,7 +39,7 @@ class RapidScreenTracker:
         edgeLines = []
         rejectedPoints = []
 
-        pos1_rotation, _ = cv2.Rodrigues(pos1_rotation_mat)
+        pos1_rotation = rodrigues(pos1_rotation_mat)
         shift = self.frame_size // 2
         frame2_gradient_map = cv2.Laplacian(frame2_grayscale_mat, cv2.CV_64F)
 
@@ -101,7 +101,7 @@ class RapidScreenTracker:
         self.vecSpeed += RapidScreenTracker.BETA \
             * np.append(rvec - lastRVec, tvec - lastTVec, axis=0)
 
-        rmat, _ = cv2.Rodrigues(rvec)
+        rmat = rodrigues(rvec)
         return rmat, tvec
 
     @staticmethod
