@@ -13,11 +13,8 @@ from util import get_screen_size, get_object_points, load_matrix,\
 
 
 class Testing:
-    def __init__(self):
-        pass
-
-    def run_algorithm(
-            self, algorithm_impl, video_path, init_params, start_frame):
+    @staticmethod
+    def run_algorithm(algorithm_impl, video_path, init_params, start_frame):
         capture = cv2.VideoCapture(video_path)
         success, frame = capture.read()
         for i in range(start_frame):
@@ -42,25 +39,29 @@ class Testing:
         capture.release()
         return estimated_extrinsic_params
 
-    def transformPoints(self, object_points, rmat, tvec):
+    @staticmethod
+    def transform_points(object_points, rmat, tvec):
         transformed = np.matmul(rmat, object_points.T).T + tvec.T
         return transformed
 
-    def calculate_distance(self, point1, point2):
+    @staticmethod
+    def calculate_distance(point1, point2):
         return np.linalg.norm(point1 - point2)
 
-    def calculate_error(self, object_points, params1, params2):
-        transformed1 = [self.transformPoints(object_points, row[0], row[1])
+    @staticmethod
+    def calculate_error(object_points, params1, params2):
+        transformed1 = [Testing.transform_points(object_points, row[0], row[1])
                         for row in params1]
-        transformed2 = [self.transformPoints(object_points, row[0], row[1])
+        transformed2 = [Testing.transform_points(object_points, row[0], row[1])
                         for row in params2]
-        error = [sum([self.calculate_distance(point1, point2)
+        error = [sum([Testing.calculate_distance(point1, point2)
                       for point1, point2 in zip(points1, points2)])
                  for points1, points2 in zip(transformed1, transformed2)]
 
         return error
 
-    def show_error(self, error, algorithm_class):
+    @staticmethod
+    def show_error(error, algorithm_class):
         fig, ax = plt.subplots()
         ax.plot(range(len(error)), error, color='blue',
                 label=str(algorithm_class))
@@ -68,7 +69,8 @@ class Testing:
         plt.legend()
         plt.show()
 
-    def project_points(self, frame_size, object_points, camera_matrix, param):
+    @staticmethod
+    def project_points(frame_size, object_points, camera_matrix, param):
         rmat = param[0]
         rvec, _ = cv2.Rodrigues(rmat)
         tvec = param[1]
@@ -80,35 +82,43 @@ class Testing:
 
         return image_points
 
-    def visualize(self, video_path, start_frame, frame_size, object_points,
+    @staticmethod
+    def visualize(video_path, start_frame, frame_size, object_points,
                   camera_matrix, params1, params2):
         capture = cv2.VideoCapture(video_path)
         cv2.namedWindow("tracking")
+        # writer = cv2.VideoWriter('out.avi',
+        #                          cv2.VideoWriter.fourcc('M', 'J', 'P', 'G'),
+        #                          24,
+        #                          frame_size)
         for i in range(start_frame):
             success, frame = capture.read()
 
         for param1, param2 in zip(params1, params2):
             success, frame = capture.read()
 
-            image_points1 = self.project_points(
+            image_points1 = Testing.project_points(
                 frame_size, object_points, camera_matrix, param1)
-            image_points2 = self.project_points(
+            image_points2 = Testing.project_points(
                 frame_size, object_points, camera_matrix, param2)
 
             cv2.polylines(frame, np.array([image_points1], dtype=np.int32),
                           True, (0, 255, 0))
             cv2.polylines(frame, np.array([image_points2], dtype=np.int32),
                           True, (0, 0, 255))
+            # writer.write(frame)
 
             while True:
                 cv2.imshow('tracking', frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
+        # writer.release()
         cv2.destroyAllWindows()
         capture.release()
 
-    def run_test(self, test_path, algorithm_class):
+    @staticmethod
+    def run_test(test_path, algorithm_class):
         camera_matrix = load_matrix(test_path + '/camera_matrix.txt')
         width, height = get_screen_size(test_path + '/screen_parameters.csv')
         object_points = get_object_points(width, height)
@@ -120,14 +130,14 @@ class Testing:
         frame_size = get_video_frame_size(test_path + '/video.mp4')
 
         algorithm_impl = algorithm_class(camera_matrix, object_points, frame_size)
-        estimated_extrinsic_params = self.run_algorithm(
+        estimated_extrinsic_params = Testing.run_algorithm(
             algorithm_impl, test_path + '/video.mp4', extrinsic_params,
             start_frame)
 
-        error = self.calculate_error(
+        error = Testing.calculate_error(
             object_points, extrinsic_params, estimated_extrinsic_params)
-        self.show_error(error, algorithm_class)
-        self.visualize(test_path + '/video.mp4',
+        Testing.show_error(error, algorithm_class)
+        Testing.visualize(test_path + '/video.mp4',
                        start_frame,
                        frame_size,
                        object_points,
