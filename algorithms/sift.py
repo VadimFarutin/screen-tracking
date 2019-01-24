@@ -16,9 +16,6 @@ class SiftTracker:
     def __init__(self, camera_mat, screen, frame_size):
         self.frame_size = frame_size
 
-    def draw(self):
-        pass
-
     def track(self, frame1_grayscale_mat, frame2_grayscale_mat,
               pos1_rotation_mat, pos1_translation):
 

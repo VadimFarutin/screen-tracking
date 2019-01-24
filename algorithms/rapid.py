@@ -23,9 +23,6 @@ class RapidScreenTracker:
         self.vecSpeed = np.array([[0], [0], [0], [0], [0], [0]],
                                  dtype=np.float32)
 
-    def draw(self):
-        pass
-
     def track(self, frame1_grayscale_mat, frame2_grayscale_mat,
               pos1_rotation_mat, pos1_translation):
         controlPoints, controlPointsPair = self.control_points(

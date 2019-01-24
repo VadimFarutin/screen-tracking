@@ -23,9 +23,6 @@ class LineSumTracker:
         self.object_points = object_points
         self.frame_size = np.array(list(frame_size))
 
-    def draw(self):
-        pass
-
     def track(self, frame1_grayscale_mat, frame2_grayscale_mat,
               pos1_rotation_mat, pos1_translation):
         frame1_gradient_map = cv2.Laplacian(frame1_grayscale_mat, cv2.CV_64F)

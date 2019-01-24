@@ -27,9 +27,6 @@ class ContourSumTracker:
         self.control_points, _ = ContourSumTracker.control_points(
             self.object_points, ContourSumTracker.EDGE_CONTROL_POINTS_NUMBER)
 
-    def draw(self):
-        pass
-
     def track(self, frame1_grayscale_mat, frame2_grayscale_mat,
               pos1_rotation_mat, pos1_translation):
         # frame1_grayscale_mat = gaussian_filter(frame1_grayscale_mat, ContourSumTracker.IMAGE_SIGMA)

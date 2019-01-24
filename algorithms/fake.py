@@ -9,6 +9,3 @@ class FakeTracker:
         pos2_translation = pos1_translation
 
         return pos2_rotation_mat, pos2_translation
-
-    def draw(self):
-        pass
