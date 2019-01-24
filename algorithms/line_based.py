@@ -14,8 +14,8 @@ from util import get_screen_size, get_object_points, load_matrix, \
 class LineSumTracker:
     EDGE_CONTROL_POINTS_NUMBER = 20
     EDGE_NUMBER = 4
-    ALPHA_BOUNDS_EPS = 5e-2
-    T_BOUNDS_EPS = 15
+    ALPHA_BOUNDS_EPS = 1e-2
+    T_BOUNDS_EPS = 10
     HALF_WINDOW_WIDTH = 20
 
     def __init__(self, camera_mat, object_points, frame_size):
@@ -59,10 +59,10 @@ class LineSumTracker:
     def optimization_bounds1(x):
         bounds = [slice(x[0] - LineSumTracker.T_BOUNDS_EPS,
                         x[0] + LineSumTracker.T_BOUNDS_EPS,
-                        2 * LineSumTracker.T_BOUNDS_EPS / 30),
+                        2 * LineSumTracker.T_BOUNDS_EPS / 20),
                   slice(x[1] - LineSumTracker.T_BOUNDS_EPS,
                         x[1] + LineSumTracker.T_BOUNDS_EPS,
-                        2 * LineSumTracker.T_BOUNDS_EPS / 30),
+                        2 * LineSumTracker.T_BOUNDS_EPS / 20),
                   (x[2], x[2] + 1e-9, 1)]
 
         return bounds
