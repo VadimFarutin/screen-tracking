@@ -74,34 +74,6 @@ class LineSumTracker:
 
         return bounds
 
-    def get_gradient_sum(self, image, image_points):
-        frame_size = self.frame_size
-        binded_is_point_in = lambda point: is_point_in(point, frame_size)
-        mask = np.apply_along_axis(binded_is_point_in, 1, image_points)
-        image_points = image_points[mask]
-        image_points_idx = image_points.T
-        selected_gradients = image[image_points_idx[1], image_points_idx[0]]
-        gradient_sum = sum(selected_gradients)
-
-        return gradient_sum
-
-    def get_gradient_sum_for_side(self, corners, image):
-        image_points, _ = LineSumTracker.control_points(
-            corners, LineSumTracker.EDGE_CONTROL_POINTS_NUMBER)
-        image_points = np.int32(np.rint(image_points))
-        gradient_sum = self.get_gradient_sum(image, image_points)
-
-        return gradient_sum
-
-    def contour_gradient_sum_oriented(self, x, image2, gradient_sum1, length):
-        corners = LineSumTracker.array_to_corners(x, length)
-        gradient_sum2 = self.get_gradient_sum_for_side(corners, image2)
-        signs = np.sign(gradient_sum1)
-        # f_value = np.sum(signs * gradient_sum2)
-        f_value = np.sum(-np.abs(gradient_sum1 - gradient_sum2))
-
-        return -f_value
-
     @staticmethod
     def get_search_direction(tana):
         pi4 = math.pi / 4
@@ -167,8 +139,6 @@ class LineSumTracker:
         return -f_value
 
     def move_line(self, corners, frame1_gradient_map, frame2_gradient_map):
-        gradient_sum1 = self.get_gradient_sum_for_side(
-            corners, frame1_gradient_map)
         x0, length = LineSumTracker.corners_to_array(corners)
         tana = np.tan(x0[2])
         step = self.get_search_direction(tana)
@@ -177,12 +147,6 @@ class LineSumTracker:
         bounds = LineSumTracker.optimization_bounds_t(x0)
 
         start = time.time()
-        # ans_vec = optimize.brute(
-        #     func=self.contour_gradient_sum_oriented,
-        #     ranges=bounds,
-        #     args=(frame2_gradient_map, gradient_sum1, length),
-        #     finish=None,
-        # )
         ans_vec = optimize.brute(
             func=self.window_gradients_distance,
             ranges=bounds,
@@ -195,12 +159,6 @@ class LineSumTracker:
         x0 = ans_vec
         bounds = LineSumTracker.optimization_bounds_alpha(x0)
         start = time.time()
-        # ans_vec = optimize.brute(
-        #     func=self.contour_gradient_sum_oriented,
-        #     ranges=bounds,
-        #     args=(frame2_gradient_map, gradient_sum1, length),
-        #     finish=None,
-        # )
         ans_vec = optimize.brute(
             func=self.window_gradients_distance,
             ranges=bounds,
