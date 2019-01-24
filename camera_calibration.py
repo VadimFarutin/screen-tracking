@@ -9,10 +9,7 @@ from util import get_screen_size, get_object_points, get_image_points,\
 class CameraCalibrator:
     def __init__(self, test_path):
         self.test_path = test_path
-
-    @staticmethod
-    def save_matrix(path, matrix):
-        np.savetxt(path, matrix)
+        self.camera_matrix = None
 
     def calibrate_camera(self):
         width, height = get_screen_size(self.test_path + '/screen_parameters.csv')
@@ -29,9 +26,11 @@ class CameraCalibrator:
             + cv2.CALIB_FIX_K2 \
             + cv2.CALIB_FIX_K3
 
-        _, camera_matrix, _, _, _ = cv2.calibrateCamera(
+        _, self.camera_matrix, _, _, _ = cv2.calibrateCamera(
             object_points_all, image_points_all, frame_size, None, None, flags=flags)
-        CameraCalibrator.save_matrix(self.test_path + '/camera_matrix.txt', camera_matrix)
+
+    def save_matrix(self):
+        np.savetxt(self.test_path + '/camera_matrix.txt', self.camera_matrix)
 
 
 if __name__ == '__main__':
@@ -43,3 +42,4 @@ if __name__ == '__main__':
 
     calibrator = CameraCalibrator(args[1])
     calibrator.calibrate_camera()
+    calibrator.save_matrix()
