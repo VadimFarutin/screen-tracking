@@ -23,7 +23,7 @@ class ContourSumTracker:
         self.camera_mat = camera_mat
         self.object_points = object_points
         self.frame_size = np.array(list(frame_size))
-        self.control_points, _ = ContourSumTracker.control_points(
+        self.control_points = ContourSumTracker.control_points(
             self.object_points, ContourSumTracker.EDGE_CONTROL_POINTS_NUMBER)
 
     def track(self, frame1_grayscale_mat, frame2_grayscale_mat,
@@ -305,11 +305,8 @@ class ContourSumTracker:
                                        * (one_side_count - j) / (one_side_count + 1))
                           for pair in point_pairs
                           for j in range(one_side_count)]
-        # control_point_pairs = [point
-        #                        for point in points[:-1]
-        #                        for j in range(one_side_count)]
 
-        return control_points, None
+        return control_points
 
     @staticmethod
     def extrinsic_params_to_array(rvec, tvec):
