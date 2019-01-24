@@ -230,6 +230,8 @@ class ContourSumTracker:
                         [values[i * 3 + j][0][half_number_of_steps]],
                         [values[i * 3 + j][1][half_number_of_steps]],
                         'o', color='green')
+                    axarr[i][j].axvline(x=values[i * 3 + j][0][half_number_of_steps],
+                                        color='green', linestyle='dashed')
 
                     bounds_eps = ContourSumTracker.R_BOUNDS_EPS \
                         if i == 0 \
