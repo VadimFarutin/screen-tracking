@@ -180,10 +180,17 @@ class LineSumTracker:
         bounds = LineSumTracker.optimization_bounds1(x0)
 
         start = time.time()
+        # ans_vec = optimize.brute(
+        #     func=self.contour_gradient_sum_oriented,
+        #     ranges=bounds,
+        #     args=(frame2_gradient_map, gradient_sum1, length),
+        #     finish=None,
+        # )
         ans_vec = optimize.brute(
             func=self.window_gradients_distance,
             ranges=bounds,
             args=(frame2_gradient_map, window_gradients1, length),
+            finish=None,
         )
         end = time.time()
         print(end - start)
@@ -195,11 +202,13 @@ class LineSumTracker:
         #     func=self.contour_gradient_sum_oriented,
         #     ranges=bounds,
         #     args=(frame2_gradient_map, gradient_sum1, length),
+        #     finish=None,
         # )
         ans_vec = optimize.brute(
             func=self.window_gradients_distance,
             ranges=bounds,
             args=(frame2_gradient_map, window_gradients1, length),
+            finish=None,
         )
         end = time.time()
         print(end - start)
