@@ -53,7 +53,7 @@ class LineSumTracker:
         return pos2_rotation_mat, pos2_translation
 
     @staticmethod
-    def optimization_bounds1(x):
+    def optimization_bounds_t(x):
         bounds = [slice(x[0] - LineSumTracker.T_BOUNDS_EPS,
                         x[0] + LineSumTracker.T_BOUNDS_EPS,
                         2 * LineSumTracker.T_BOUNDS_EPS / 20),
@@ -65,7 +65,7 @@ class LineSumTracker:
         return bounds
 
     @staticmethod
-    def optimization_bounds2(x):
+    def optimization_bounds_alpha(x):
         bounds = [(x[0], x[0] + 1e-9, 1),
                   (x[1], x[1] + 1e-9, 1),
                   slice(x[2] - LineSumTracker.ALPHA_BOUNDS_EPS,
@@ -173,7 +173,7 @@ class LineSumTracker:
         step = self.get_search_direction(tana)
         window_gradients1 = self.get_window_gradients_for_side(
             corners, step, frame1_gradient_map)
-        bounds = LineSumTracker.optimization_bounds1(x0)
+        bounds = LineSumTracker.optimization_bounds_t(x0)
 
         start = time.time()
         # ans_vec = optimize.brute(
@@ -192,7 +192,7 @@ class LineSumTracker:
         print(end - start)
 
         x0 = ans_vec
-        bounds = LineSumTracker.optimization_bounds2(x0)
+        bounds = LineSumTracker.optimization_bounds_alpha(x0)
         start = time.time()
         # ans_vec = optimize.brute(
         #     func=self.contour_gradient_sum_oriented,
