@@ -10,7 +10,7 @@ class SiftTracker:
     SAMPLES_PER_OCTAVE = 5
     SCALE_SPACE_SIGMA = 1 / math.sqrt(2)
     SCALE_SPACE_FACTOR = math.sqrt(2)
-    CONTRAST_THRESHOLD = 1e9
+    CONTRAST_THRESHOLD = 100
     CORNER_THRESHOLD = 10
 
     def __init__(self, camera_mat, screen, frame_size):
@@ -49,13 +49,28 @@ class SiftTracker:
                         if is_keypoint:
                             histogram = histograms[y][x][0][0]
                             orientation = np.argmax(histogram)
+                            descriptor = SiftTracker.generate_descriptor(
+                                octave[i], x, y)
+
                             extrema.append([x * scale_x, y * scale_y,
                                             scale_x, scale_y,
-                                            orientation])
+                                            orientation,
+                                            descriptor])
 
         # Keypoint localization, find subpixel extrema
         # Keypoint descriptor
         # Match features
+
+        # keypoint_image = cv2.cvtColor(frame2_grayscale_mat, cv2.COLOR_GRAY2BGR)
+        # for keypoint in extrema:
+        #     cv2.circle(keypoint_image,
+        #                (int(keypoint[0]), int(keypoint[1])),
+        #                1, (0, 0, 255), 1)
+        # while True:
+        #     cv2.imshow('keypoints', keypoint_image)
+        #     if cv2.waitKey(1) & 0xFF == ord('q'):
+        #         cv2.destroyAllWindows()
+        #         break
 
         pos2_rotation_mat = pos1_rotation_mat
         pos2_translation = pos1_translation
@@ -120,11 +135,15 @@ class SiftTracker:
         maxima = max(neighbours)
         point_value = middle[y][x]
 
-        return point_value == minima or point_value == maxima
+        unique, counts = np.unique(neighbours, return_counts=True)
+        count_dict = dict(zip(unique, counts))
+
+        return (point_value == minima or point_value == maxima) \
+            and count_dict[point_value] == 1
 
     @staticmethod
     def contrast_threshold_passed(image, x, y):
-        return abs(image[y][x]) < SiftTracker.CONTRAST_THRESHOLD
+        return abs(image[y][x]) > SiftTracker.CONTRAST_THRESHOLD
 
     @staticmethod
     def is_corner(hxx, hxy, hyy):
@@ -139,8 +158,17 @@ class SiftTracker:
     def is_keypoint(lower, middle, higher, x, y, hessian):
         hxx, hxy, hyy = hessian[0], hessian[1], hessian[2]
 
-        is_extrema = SiftTracker.is_extrema(lower, middle, higher, x, y)
         is_contrast = SiftTracker.contrast_threshold_passed(middle, x, y)
-        is_corner = SiftTracker.is_corner(hxx, hxy, hyy)
+        if not is_contrast:
+            return False
 
-        return is_extrema and is_contrast and is_corner
+        is_corner = SiftTracker.is_corner(hxx, hxy, hyy)
+        if not is_corner:
+            return False
+
+        is_extrema = SiftTracker.is_extrema(lower, middle, higher, x, y)
+        return is_extrema
+
+    @staticmethod
+    def generate_descriptor(image, x, y):
+        return []
