@@ -38,7 +38,8 @@ class ContourSumTracker:
         # frame2_gradient_map = gaussian_filter(frame2_gradient_map, ContourSumTracker.GRADIENT_SIGMA)
 
         pos1_rotation = rodrigues(pos1_rotation_mat)
-        x0 = self.extrinsic_params_to_array(pos1_rotation, pos1_translation)
+        x0 = ContourSumTracker.extrinsic_params_to_array(pos1_rotation,
+                                                         pos1_translation)
         # step_eps = 1e-3
         bounds = ContourSumTracker.optimization_bounds_t(x0)
         gradient_sums1 = self.get_gradient_sum_for_sides(
@@ -114,7 +115,8 @@ class ContourSumTracker:
         #     # take_step=take_step
         # )
 
-        pos2_rotation, pos2_translation = self.array_to_extrinsic_params(ans_vec)
+        pos2_rotation, pos2_translation = \
+            ContourSumTracker.array_to_extrinsic_params(ans_vec)
         pos2_rotation_mat = rodrigues(pos2_rotation)
         return pos2_rotation_mat, pos2_translation
 
@@ -180,20 +182,21 @@ class ContourSumTracker:
             rmat2 = init_params[k + 1][0]
             rvec2 = rodrigues(rmat2)
             tvec2 = init_params[k + 1][1]
-            x_opt = self.extrinsic_params_to_array(rvec2, tvec2)
+            x_opt = ContourSumTracker.extrinsic_params_to_array(rvec2, tvec2)
 
             values = self.get_slices_values(x_opt,
                                             steps, step_size,
                                             next_gradient_map, gradient_sums1)
 
-            x_prev = self.extrinsic_params_to_array(rvec1, tvec1)
+            x_prev = ContourSumTracker.extrinsic_params_to_array(rvec1, tvec1)
             prev_f_value = -self.contour_gradient_sum_oriented(
                 x_prev, next_gradient_map, gradient_sums1)
 
             found_mat, found_tvec = self.track(
                 current_gray_frame, next_gray_frame, rmat1, tvec1)
             found_rvec = rodrigues(found_mat)
-            x_found = self.extrinsic_params_to_array(found_rvec, found_tvec)
+            x_found = ContourSumTracker.extrinsic_params_to_array(found_rvec,
+                                                                  found_tvec)
             found_f_value = -self.contour_gradient_sum_oriented(
                 x_found, next_gradient_map, gradient_sums1)
 
@@ -285,7 +288,7 @@ class ContourSumTracker:
 
     def get_gradient_sum_for_sides(self, image, rvec, tvec):
         image_points = project_points_int(
-            self.control_points, rvec, tvec, self.camera_mat)
+            ContourSumTracker.control_points, rvec, tvec, self.camera_mat)
 
         image_points_by_side = np.split(image_points, ContourSumTracker.SLICES)
         get_gradient_sum = self.get_gradient_sum
@@ -295,14 +298,14 @@ class ContourSumTracker:
         return gradient_sums
 
     def contour_gradient_sum(self, x, image):
-        rvec, tvec = self.array_to_extrinsic_params(x)
+        rvec, tvec = ContourSumTracker.array_to_extrinsic_params(x)
         gradient_sums = self.get_gradient_sum_for_sides(image, rvec, tvec)
         f_value = np.sum(np.abs(gradient_sums))
 
         return -f_value
 
     def contour_gradient_sum_oriented(self, x, image2, gradient_sums1):
-        rvec2, tvec2 = self.array_to_extrinsic_params(x)
+        rvec2, tvec2 = ContourSumTracker.array_to_extrinsic_params(x)
         gradient_sums2 = self.get_gradient_sum_for_sides(image2, rvec2, tvec2)
         signs = np.sign(gradient_sums1)
         f_value = np.sum(signs * gradient_sums2)
