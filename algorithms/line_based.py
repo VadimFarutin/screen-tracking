@@ -148,10 +148,9 @@ class LineSumTracker:
 
         return window_gradients
 
-    def window_gradients_distance(self, x, image2, window_gradients1, length):
+    def window_gradients_distance(
+            self, x, image2, window_gradients1, step, length):
         corners = self.array_to_corners(x, length)
-        tana = np.tan(x[2])
-        step = self.get_search_direction(tana)
         window_gradients2 = self.get_window_gradients_for_side(
             corners, step, image2)
         distances = window_gradients1 - window_gradients2
@@ -189,7 +188,7 @@ class LineSumTracker:
         ans_vec = optimize.brute(
             func=self.window_gradients_distance,
             ranges=bounds,
-            args=(frame2_gradient_map, window_gradients1, length),
+            args=(frame2_gradient_map, window_gradients1, step, length),
             finish=None,
         )
         end = time.time()
@@ -207,7 +206,7 @@ class LineSumTracker:
         ans_vec = optimize.brute(
             func=self.window_gradients_distance,
             ranges=bounds,
-            args=(frame2_gradient_map, window_gradients1, length),
+            args=(frame2_gradient_map, window_gradients1, step, length),
             finish=None,
         )
         end = time.time()
