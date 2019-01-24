@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import math as math
 
-from util import project_points_int
+from util import project_points_int, change_coordinate_system
 
 
 class RapidScreenTracker:
@@ -50,12 +50,12 @@ class RapidScreenTracker:
                 R, pos1_rotation, pos1_translation, self.camera_mat)
             s = project_points_int(
                 S, pos1_rotation, pos1_translation, self.camera_mat)
-            # r = RapidScreenTracker.change_coordinate_system(r, shift)
-            # s = RapidScreenTracker.change_coordinate_system(s, shift)
+            # r = change_coordinate_system(r, shift)
+            # s = change_coordinate_system(s, shift)
 
             foundPoints, foundPointsIdx = self.search_edge(
                 r, s, frame2_gradient_map, i)
-            # foundPoints = RapidScreenTracker.change_coordinate_system(foundPoints, -shift)
+            # foundPoints = change_coordinate_system(foundPoints, -shift)
 
             if len(foundPoints) == 0:
                 continue
@@ -103,10 +103,6 @@ class RapidScreenTracker:
 
         rmat, _ = cv2.Rodrigues(rvec)
         return rmat, tvec
-
-    @staticmethod
-    def change_coordinate_system(points, shift):
-        return points + shift
 
     @staticmethod
     def get_search_direction(tana):
